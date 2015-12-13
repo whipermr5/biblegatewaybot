@@ -18,7 +18,8 @@ def to_sup(s):
             u'6': u'\u2076',
             u'7': u'\u2077',
             u'8': u'\u2078',
-            u'9': u'\u2079'}
+            u'9': u'\u2079',
+            u'-': u'\u207b'}
     return ''.join(sups.get(char, char) for char in s)
 
 def get_passage(passage, version='NIV'):
@@ -74,6 +75,7 @@ def get_passage(passage, version='NIV'):
     return final_text.strip()
 
 from secrets import TOKEN, VALID_IDS
+from versions import VERSIONS, VERSION_HELP
 TELEGRAM_URL = 'https://api.telegram.org/bot' + TOKEN
 TELEGRAM_URL_SEND = TELEGRAM_URL + '/sendMessage'
 TELEGRAM_URL_CHAT_ACTION = TELEGRAM_URL + '/sendChatAction'
@@ -248,6 +250,12 @@ def send_typing(uid):
         return
 
 class MainPage(webapp2.RequestHandler):
+    HELP = 'This bot can fetch you bible passages taken from biblegateway.com\n\n' + \
+           'Commands:\n`/get <reference>`\n`/get<version> <reference>`\n`/setdefault <version>`\n\n' + \
+           'Examples:\n`/get John 3:16`\n`/getnlt 1 cor 13:4-7`\n`/getcuvs ps23`\n`/setdefault nasb`'
+
+    VERSION_NOT_FOUND = 'Sorry {}, I could not find that version. Use /versions to show all available versions.'
+
     def get(self):
         self.response.headers['Content-Type'] = 'text/plain'
         self.response.write('biblegatewaybot backend running...\n')
@@ -278,29 +286,66 @@ class MainPage(webapp2.RequestHandler):
             user = update_profile(uid, None, msg_chat.get('title'), None)
 
         if user.last_sent == None or text == '/start':
-            send_message(user, 'Welcome, {}!'.format(name))
-
-        elif text == None:
+            send_message(user, 'Welcome, {}! '.format(name) + self.HELP, markdown=True, disable_web_page_preview=True)
             return
 
-        elif text.startswith('/setversion '):
-            version = text[12:].strip().upper()
-            user.update_version(version)
-            send_message(user, 'Success! Default version updated to: ' + version)
+        if text == None:
+            return
 
-        else:
+        def is_get_command(text):
+            if not text:
+                return False
+
+            cmd = text.lower()
+
+            if not cmd.startswith('/get'):
+                return False
+
+            words = cmd.split()
+
+            if len(words) < 2:
+                return False
+
+            return True
+
+        if text.lower().startswith('/setdefault '):
+            version = text[12:].strip().upper()
+
+            if version not in VERSIONS:
+                send_message(user, self.VERSION_NOT_FOUND.format(name) + ' Current default version is *{}*.'.format(user.version), markdown=True)
+                return
+
+            user.update_version(version)
+            send_message(user, 'Success! Default version is now *{}*.'.format(version), markdown=True)
+
+        elif is_get_command(text):
+            words = text.split()
+            first_word = words[0]
+            version = first_word[4:].upper()
+            if not version:
+                version = user.version
+
+            if version not in VERSIONS:
+                send_message(user, self.VERSION_NOT_FOUND.format(name), markdown=True)
+                return
+
+            passage = text[len(first_word) + 1:]
+
             send_typing(uid)
 
-            if text.startswith('/'):
-                text = text[1:]
+            response = get_passage(passage, version)
 
-            passage = get_passage(text, user.version)
-
-            if not passage:
+            if not response:
                 send_message(user, 'Sorry {}, please try again.'.format(name))
                 return
 
-            send_message(user, passage, markdown=True)
+            send_message(user, response, markdown=True)
+
+        elif text.lower().strip() == '/versions':
+            send_message(user, VERSION_HELP, disable_web_page_preview=True)
+
+        else:
+            send_message(user, self.HELP, markdown=True, disable_web_page_preview=True)
 
 class MessagePage(webapp2.RequestHandler):
     def post(self):
