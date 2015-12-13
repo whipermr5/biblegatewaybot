@@ -147,7 +147,10 @@ def telegram_post(data, deadline=3):
     return urlfetch.fetch(url=TELEGRAM_URL_SEND, payload=data, method=urlfetch.POST,
                           headers=JSON_HEADER, deadline=deadline)
 
-def send_message(user_or_uid, text, force_reply=False, markdown=False, disable_web_page_preview=False):
+def build_keyboard(buttons):
+    return {'keyboard': buttons, 'one_time_keyboard': True}
+
+def send_message(user_or_uid, text, force_reply=False, markdown=False, disable_web_page_preview=False, custom_keyboard=None):
     try:
         uid = str(user_or_uid.get_uid())
         user = user_or_uid
@@ -163,6 +166,8 @@ def send_message(user_or_uid, text, force_reply=False, markdown=False, disable_w
 
         if force_reply:
             build['reply_markup'] = {'force_reply': True}
+        elif custom_keyboard:
+            build['reply_markup'] = custom_keyboard
         if markdown:
             build['parse_mode'] = 'Markdown'
         if disable_web_page_preview:
@@ -262,10 +267,13 @@ class MainPage(webapp2.RequestHandler):
         if user.last_sent == None or text == '/start':
             send_message(user, 'Welcome, {}!'.format(name))
 
+        elif text == None:
+            return
+
         elif text.startswith('/setversion '):
             version = text[12:].strip().upper()
             user.update_version(version)
-            send_message(user, 'Success! Version updated to: ' + version)
+            send_message(user, 'Success! Default version updated to: ' + version)
 
         else:
             send_typing(uid)
@@ -305,6 +313,7 @@ class MigratePage(webapp2.RequestHandler):
     def get(self):
         self.response.headers['Content-Type'] = 'text/plain'
         self.response.write('Migrate page\n')
+        #send_message('29884424', 'Pick a translation', custom_keyboard=build_keyboard([['NIV'],['NASB'],['NLT'],['NKJV'],['ESV'],['CEB'],['KJV'],['MSG']]))
         #self.response.write(get_passage('psa20', 'NIVUK'))
 
 app = webapp2.WSGIApplication([
