@@ -19,36 +19,37 @@ def get_passage(passage, version='NIV'):
         logging.warning('Error fetching passage:\n' + str(e))
         return None
     html = result.content
-    soup = BeautifulSoup(html, 'lxml')
+    soup = BeautifulSoup(html, 'lxml').select_one('.passage-text')
 
-    if not soup.select('.passage-text'):
+    if not soup:
         return None
 
     PASSAGE_TEXT = 'bg-bot-passage-text'
     title = soup.select_one('.passage-display-bcv').text
     header = '*' + title.strip() + '* (' + version + ')'
 
-    for tag in soup.select('.passage-text .passage-display, .passage-text .footnote, .passage-text .footnotes, .passage-text .crossrefs, .passage-text .publisher-info-bottom'):
+    for tag in soup.select('.passage-display, .footnote, .footnotes, .crossrefs, .publisher-info-bottom'):
         tag.decompose()
 
-    for tag in soup.select('.passage-text h1, .passage-text h2, .passage-text h3, .passage-text h4, .passage-text h5, .passage-text h6'):
+    for tag in soup.select('h1, h2, h3, h4, h5, h6'):
         tag['class'] = PASSAGE_TEXT
         text = tag.text.strip().replace(' ', '\\')
         tag.string = '*' + text + '*'
 
-    for tag in soup.select('.passage-text p'):
+    for tag in soup.select('p'):
         tag['class'] = PASSAGE_TEXT
 
-    for tag in soup.select('.passage-text .chapternum'):
+    for tag in soup.select('.chapternum'):
         num = tag.text.strip()
         tag.string = '*' + num + '* '
 
-    for tag in soup.select('.passage-text .versenum'):
+    for tag in soup.select('.versenum'):
         num = tag.text.strip()
         tag.string = '_[' + num + ']_ '
 
-    for tag in soup.select('.passage-text .indent-1-breaks'):
-        tag.string = '\n' + tag.text
+    for tag in soup.select('br'):
+        tag.name = 'span'
+        tag.string = '\n'
 
     final_text = header + '\n\n'
     for tag in soup(class_=PASSAGE_TEXT):
