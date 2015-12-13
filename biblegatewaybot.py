@@ -75,7 +75,7 @@ def get_passage(passage, version='NIV'):
     return final_text.strip()
 
 from secrets import TOKEN, VALID_IDS
-from versions import VERSIONS, VERSION_HELP
+from versions import VERSION_DATA, VERSION_LOOKUP, VERSIONS
 TELEGRAM_URL = 'https://api.telegram.org/bot' + TOKEN
 TELEGRAM_URL_SEND = TELEGRAM_URL + '/sendMessage'
 TELEGRAM_URL_CHAT_ACTION = TELEGRAM_URL + '/sendChatAction'
@@ -161,6 +161,12 @@ def update_profile(uid, uname, fname, lname):
 def telegram_post(data, deadline=3):
     return urlfetch.fetch(url=TELEGRAM_URL_SEND, payload=data, method=urlfetch.POST,
                           headers=JSON_HEADER, deadline=deadline)
+
+def build_buttons(menu):
+    buttons = []
+    for item in menu:
+        buttons.append([item])
+    return buttons
 
 def build_keyboard(buttons):
     return {'keyboard': buttons, 'one_time_keyboard': True}
@@ -254,7 +260,7 @@ class MainPage(webapp2.RequestHandler):
            'Commands:\n`/get <reference>`\n`/get<version> <reference>`\n`/setdefault <version>`\n\n' + \
            'Examples:\n`/get John 3:16`\n`/getnlt 1 cor 13:4-7`\n`/getcuvs ps23`\n`/setdefault nasb`'
 
-    VERSION_NOT_FOUND = 'Sorry {}, I could not find that version. Use /versions to show all available versions.'
+    VERSION_NOT_FOUND = 'Sorry {}, I could not find that version.'
 
     def get(self):
         self.response.headers['Content-Type'] = 'text/plain'
@@ -277,6 +283,7 @@ class MainPage(webapp2.RequestHandler):
 
         name = first_name.encode('utf-8', 'ignore').strip()
         text = msg.get('text')
+        raw_text = text
         if text:
             text = text.encode('utf-8', 'ignore')
 
@@ -318,6 +325,17 @@ class MainPage(webapp2.RequestHandler):
             user.update_version(version)
             send_message(user, 'Success! Default version is now *{}*.'.format(version), markdown=True)
 
+        elif text.lower().strip() == '/setdefault':
+            send_message(user, 'Choose a language:', custom_keyboard=build_keyboard(build_buttons(VERSION_DATA.keys())))
+
+        elif raw_text in VERSION_DATA:
+            send_message(user, 'Select a version:', custom_keyboard=build_keyboard(build_buttons(VERSION_DATA[raw_text])))
+
+        elif raw_text in VERSION_LOOKUP:
+            version = VERSION_LOOKUP[raw_text]
+            user.update_version(version)
+            send_message(user, 'Success! Default version is now *{}*.'.format(version), markdown=True)
+
         elif is_get_command(text):
             words = text.split()
             first_word = words[0]
@@ -340,9 +358,6 @@ class MainPage(webapp2.RequestHandler):
                 return
 
             send_message(user, response, markdown=True)
-
-        elif text.lower().strip() == '/versions':
-            send_message(user, VERSION_HELP, disable_web_page_preview=True)
 
         else:
             send_message(user, self.HELP, markdown=True, disable_web_page_preview=True)
@@ -371,8 +386,6 @@ class MigratePage(webapp2.RequestHandler):
     def get(self):
         self.response.headers['Content-Type'] = 'text/plain'
         self.response.write('Migrate page\n')
-        #send_message('29884424', 'Pick a translation', custom_keyboard=build_keyboard([['NIV'],['NASB'],['NLT'],['NKJV'],['ESV'],['CEB'],['KJV'],['MSG']]))
-        #self.response.write(get_passage('psa20', 'NIVUK'))
 
 app = webapp2.WSGIApplication([
     ('/', MainPage),
