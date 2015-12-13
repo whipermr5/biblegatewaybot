@@ -256,11 +256,13 @@ def send_typing(uid):
         return
 
 class MainPage(webapp2.RequestHandler):
-    HELP = 'This bot can fetch you bible passages taken from biblegateway.com\n\n' + \
-           'Commands:\n`/get <reference>`\n`/get<version> <reference>`\n`/setdefault <version>`\n\n' + \
-           'Examples:\n`/get John 3:16`\n`/getnlt 1 cor 13:4-7`\n`/getcuvs ps23`\n`/setdefault nasb`'
+    HELP = 'This bot can fetch you bible passages taken from biblegateway.com.\n\n' + \
+           'Commands:\n/get <reference>\n/get<version> <reference>\n/setdefault\n/setdefault <version>\n\n' + \
+           'Examples:\n/get John 3:16\n/getnlt 1 cor 13:4-7\n/getcuvs ps23\n/setdefault nasb'
 
-    VERSION_NOT_FOUND = 'Sorry {}, I could not find that version.'
+    VERSION_NOT_FOUND = 'Sorry {}, I couldn\'t find that version. Use /setdefault to view all available versions.'
+
+    BACK_TO_LANGUAGES = u'\U0001F519' + ' to language list'
 
     def get(self):
         self.response.headers['Content-Type'] = 'text/plain'
@@ -288,12 +290,19 @@ class MainPage(webapp2.RequestHandler):
             text = text.encode('utf-8', 'ignore')
 
         if msg_chat.get('type') == 'private':
+            group_name = name
             user = update_profile(uid, username, first_name, last_name)
         else:
-            user = update_profile(uid, None, msg_chat.get('title'), None)
+            group_name = msg_chat.get('title')
+            user = update_profile(uid, None, group_name, None)
 
         if user.last_sent == None or text == '/start':
-            send_message(user, 'Welcome, {}! '.format(name) + self.HELP, markdown=True, disable_web_page_preview=True)
+            if user.is_group():
+                response = 'Hello, friends in {}! Thanks for adding me in!'.format(group_name)
+            else:
+                response = 'Hello, {}!'.format(name)
+            response += '\n\n' + self.HELP
+            send_message(user, response, markdown=True, disable_web_page_preview=True)
             return
 
         if text == None:
@@ -319,7 +328,7 @@ class MainPage(webapp2.RequestHandler):
             version = text[12:].strip().upper()
 
             if version not in VERSIONS:
-                send_message(user, self.VERSION_NOT_FOUND.format(name) + ' Current default version is *{}*.'.format(user.version), markdown=True)
+                send_message(user, self.VERSION_NOT_FOUND.format(name) + '\n\nCurrent default is *{}*.'.format(user.version), markdown=True)
                 return
 
             user.update_version(version)
@@ -329,7 +338,10 @@ class MainPage(webapp2.RequestHandler):
             send_message(user, 'Choose a language:', custom_keyboard=build_keyboard(build_buttons(VERSION_DATA.keys())))
 
         elif raw_text in VERSION_DATA:
-            send_message(user, 'Select a version:', custom_keyboard=build_keyboard(build_buttons(VERSION_DATA[raw_text])))
+            send_message(user, 'Select a version:', custom_keyboard=build_keyboard(build_buttons(VERSION_DATA[raw_text] + [self.BACK_TO_LANGUAGES])))
+
+        elif raw_text == self.BACK_TO_LANGUAGES:
+            send_message(user, 'Choose a language:', custom_keyboard=build_keyboard(build_buttons(VERSION_DATA.keys())))
 
         elif raw_text in VERSION_LOOKUP:
             version = VERSION_LOOKUP[raw_text]
@@ -354,12 +366,15 @@ class MainPage(webapp2.RequestHandler):
             response = get_passage(passage, version)
 
             if not response:
-                send_message(user, 'Sorry {}, please try again.'.format(name))
+                send_message(user, 'Sorry {}, no results were found. Please try again.'.format(name))
                 return
 
             send_message(user, response, markdown=True)
 
         else:
+            if user.is_group() and '@biblegatewaybot' not in text:
+                return
+
             send_message(user, self.HELP, markdown=True, disable_web_page_preview=True)
 
 class MessagePage(webapp2.RequestHandler):
