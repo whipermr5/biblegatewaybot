@@ -97,7 +97,7 @@ class User(db.Model):
     username = db.StringProperty(indexed=False)
     first_name = db.StringProperty(multiline=True, indexed=False)
     last_name = db.StringProperty(multiline=True, indexed=False)
-    created = db.DateTimeProperty(auto_now_add=True, indexed=False)
+    created = db.DateTimeProperty(auto_now_add=True)
     last_received = db.DateTimeProperty(auto_now_add=True, indexed=False)
     last_sent = db.DateTimeProperty(indexed=False)
     version = db.StringProperty(indexed=False, default='NIV')
