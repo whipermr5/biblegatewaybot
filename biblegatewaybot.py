@@ -39,6 +39,10 @@ def get_passage(passage, version='NIV'):
     for tag in soup.select('p'):
         tag['class'] = PASSAGE_TEXT
 
+    for tag in soup.select('br'):
+        tag.name = 'span'
+        tag.string = '\n'
+
     for tag in soup.select('.chapternum'):
         num = tag.text.strip()
         tag.string = '*' + num + '* '
@@ -47,9 +51,8 @@ def get_passage(passage, version='NIV'):
         num = tag.text.strip()
         tag.string = '_[' + num + ']_ '
 
-    for tag in soup.select('br'):
-        tag.name = 'span'
-        tag.string = '\n'
+    for tag in soup.select('.text'):
+        tag.string = tag.text.rstrip()
 
     final_text = header + '\n\n'
     for tag in soup(class_=PASSAGE_TEXT):
@@ -302,6 +305,7 @@ class MigratePage(webapp2.RequestHandler):
     def get(self):
         self.response.headers['Content-Type'] = 'text/plain'
         self.response.write('Migrate page\n')
+        #self.response.write(get_passage('psa20', 'NIVUK'))
 
 app = webapp2.WSGIApplication([
     ('/', MainPage),
