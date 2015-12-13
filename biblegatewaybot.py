@@ -8,6 +8,19 @@ from google.appengine.api import urlfetch, urlfetch_errors, taskqueue
 from google.appengine.ext import db
 from datetime import datetime, timedelta
 
+def to_sup(s):
+    sups = {u'0': u'\u2070',
+            u'1': u'\xb9',
+            u'2': u'\xb2',
+            u'3': u'\xb3',
+            u'4': u'\u2074',
+            u'5': u'\u2075',
+            u'6': u'\u2076',
+            u'7': u'\u2077',
+            u'8': u'\u2078',
+            u'9': u'\u2079'}
+    return ''.join(sups.get(char, char) for char in s)
+
 def get_passage(passage, version='NIV'):
     BG_URL = 'https://www.biblegateway.com/passage/?search={}&version={}&interface=print'
 
@@ -49,7 +62,7 @@ def get_passage(passage, version='NIV'):
 
     for tag in soup.select('.versenum'):
         num = tag.text.strip()
-        tag.string = '_[' + num + ']_ '
+        tag.string = to_sup(num)
 
     for tag in soup.select('.text'):
         tag.string = tag.text.rstrip()
