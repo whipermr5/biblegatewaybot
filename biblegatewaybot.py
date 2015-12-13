@@ -74,7 +74,7 @@ def get_passage(passage, version='NIV'):
 
     return final_text.strip()
 
-from secrets import TOKEN, VALID_IDS
+from secrets import TOKEN
 from versions import VERSION_DATA, VERSION_LOOKUP, VERSIONS
 TELEGRAM_URL = 'https://api.telegram.org/bot' + TOKEN
 TELEGRAM_URL_SEND = TELEGRAM_URL + '/sendMessage'
@@ -277,8 +277,6 @@ class MainPage(webapp2.RequestHandler):
         msg_from = msg.get('from')
 
         uid = str(msg_chat.get('id'))
-        if uid not in VALID_IDS.values():
-            return
         first_name = msg_from.get('first_name')
         last_name = msg_from.get('last_name')
         username = msg_from.get('username')
