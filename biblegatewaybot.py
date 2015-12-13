@@ -25,7 +25,7 @@ def to_sup(s):
 def get_passage(passage, version='NIV'):
     BG_URL = 'https://www.biblegateway.com/passage/?search={}&version={}&interface=print'
 
-    search = urllib.quote(passage)
+    search = urllib.quote(passage.lower().strip())
     url = BG_URL.format(search, version)
     try:
         result = urlfetch.fetch(url, deadline=10)
@@ -256,7 +256,7 @@ def send_typing(uid):
         return
 
 class MainPage(webapp2.RequestHandler):
-    HELP = 'This bot can fetch you bible passages taken from biblegateway.com.\n\n' + \
+    HELP = 'This bot can fetch bible passages from biblegateway.com.\n\n' + \
            'Commands:\n/get <reference>\n/get<version> <reference>\n/setdefault\n/setdefault <version>\n\n' + \
            'Examples:\n/get John 3:16\n/getnlt 1 cor 13:4-7\n/getcuvs ps23\n/setdefault nasb'
 
@@ -308,7 +308,7 @@ class MainPage(webapp2.RequestHandler):
         if text == None:
             return
 
-        def is_get_command(text):
+        def is_get_command():
             if not text:
                 return False
 
@@ -324,31 +324,13 @@ class MainPage(webapp2.RequestHandler):
 
             return True
 
-        if text.lower().startswith('/setdefault '):
-            version = text[12:].strip().upper()
+        def is_command(word):
+            cmd = text.lower().strip()
+            short_cmd = ''.join(cmd.split())
+            flexi_pattern = ('/{}@biblegatewaybot'.format(word), '@biblegatewaybot/{}'.format(word))
+            return cmd == '/' + word or short_cmd.startswith(flexi_pattern)
 
-            if version not in VERSIONS:
-                send_message(user, self.VERSION_NOT_FOUND.format(name) + '\n\nCurrent default is *{}*.'.format(user.version), markdown=True)
-                return
-
-            user.update_version(version)
-            send_message(user, 'Success! Default version is now *{}*.'.format(version), markdown=True)
-
-        elif text.lower().strip() == '/setdefault':
-            send_message(user, 'Choose a language:', custom_keyboard=build_keyboard(build_buttons(VERSION_DATA.keys())))
-
-        elif raw_text in VERSION_DATA:
-            send_message(user, 'Select a version:', custom_keyboard=build_keyboard(build_buttons(VERSION_DATA[raw_text] + [self.BACK_TO_LANGUAGES])))
-
-        elif raw_text == self.BACK_TO_LANGUAGES:
-            send_message(user, 'Choose a language:', custom_keyboard=build_keyboard(build_buttons(VERSION_DATA.keys())))
-
-        elif raw_text in VERSION_LOOKUP:
-            version = VERSION_LOOKUP[raw_text]
-            user.update_version(version)
-            send_message(user, 'Success! Default version is now *{}*.'.format(version), markdown=True)
-
-        elif is_get_command(text):
+        if is_get_command():
             words = text.split()
             first_word = words[0]
             version = first_word[4:].upper()
@@ -371,11 +353,38 @@ class MainPage(webapp2.RequestHandler):
 
             send_message(user, response, markdown=True)
 
+        elif text.lower().startswith('/setdefault '):
+            version = text[12:].strip().upper()
+
+            if version not in VERSIONS:
+                send_message(user, self.VERSION_NOT_FOUND.format(name) + '\n\nCurrent default is *{}*.'.format(user.version), markdown=True)
+                return
+
+            user.update_version(version)
+            send_message(user, 'Success! Default version is now *{}*.'.format(version), markdown=True)
+
+        elif is_command('setdefault') or raw_text == self.BACK_TO_LANGUAGES:
+            send_message(user, 'Choose a language:', custom_keyboard=build_keyboard(build_buttons(VERSION_DATA.keys())))
+
+        elif raw_text in VERSION_DATA:
+            send_message(user, 'Select a version:', custom_keyboard=build_keyboard(build_buttons(VERSION_DATA[raw_text] + [self.BACK_TO_LANGUAGES])))
+
+        elif raw_text in VERSION_LOOKUP:
+            version = VERSION_LOOKUP[raw_text]
+            user.update_version(version)
+            send_message(user, 'Success! Default version is now *{}*.'.format(version), markdown=True)
+
+        elif is_command('help'):
+            send_message(user, 'Hi {}! '.format(name) + self.HELP, markdown=True, disable_web_page_preview=True)
+
+        elif is_command('settings'):
+            send_message(user, 'Current default version is *{}*. Use /setdefault to change it.'.format(user.version), markdown=True)
+
         else:
             if user.is_group() and '@biblegatewaybot' not in text:
                 return
 
-            send_message(user, self.HELP, markdown=True, disable_web_page_preview=True)
+            send_message(user, 'Sorry {}, I couldn\'t understand that.\n\n'.format(name) + self.HELP, markdown=True, disable_web_page_preview=True)
 
 class MessagePage(webapp2.RequestHandler):
     def post(self):
