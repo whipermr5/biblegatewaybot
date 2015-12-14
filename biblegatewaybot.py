@@ -451,7 +451,7 @@ class MainPage(webapp2.RequestHandler):
             send_message(user, self.GET_PASSAGE.format(version, other_version(version)),
                          force_reply=True)
 
-        if is_command('search'):
+        elif is_command('search'):
             user.await_reply('search')
             send_message(user, self.GET_SEARCH_TERM, force_reply=True, markdown=True)
 
