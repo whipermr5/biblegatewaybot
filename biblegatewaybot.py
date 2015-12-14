@@ -181,7 +181,7 @@ def build_buttons(menu):
 def build_keyboard(buttons):
     return {'keyboard': buttons, 'one_time_keyboard': True}
 
-def send_message(user_or_uid, text, force_reply=False, markdown=False, disable_web_page_preview=False, custom_keyboard=None):
+def send_message(user_or_uid, text, force_reply=False, markdown=False, disable_web_page_preview=False, custom_keyboard=None, hide_keyboard=False):
     try:
         uid = str(user_or_uid.get_uid())
         user = user_or_uid
@@ -199,6 +199,8 @@ def send_message(user_or_uid, text, force_reply=False, markdown=False, disable_w
             build['reply_markup'] = {'force_reply': True}
         elif custom_keyboard:
             build['reply_markup'] = custom_keyboard
+        elif hide_keyboard:
+            build['reply_markup'] = {'hide_keyboard': True}
         if markdown:
             build['parse_mode'] = 'Markdown'
         if disable_web_page_preview:
@@ -388,7 +390,7 @@ class MainPage(webapp2.RequestHandler):
             user.await_reply(None)
             version = VERSION_LOOKUP[raw_text]
             user.update_version(version)
-            send_message(user, 'Success! Default version is now *{}*.'.format(version), markdown=True)
+            send_message(user, 'Success! Default version is now *{}*.'.format(version), markdown=True, hide_keyboard=True)
 
         elif is_command('help'):
             user.await_reply(None)
