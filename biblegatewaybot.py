@@ -7,6 +7,7 @@ from bs4 import BeautifulSoup
 from google.appengine.api import urlfetch, urlfetch_errors, taskqueue
 from google.appengine.ext import db
 from datetime import datetime
+from xml.etree import ElementTree as etree
 
 def get_passage(passage, version='NIV'):
     def to_sup(text):
@@ -76,13 +77,74 @@ def get_passage(passage, version='NIV'):
 
     return final_text.strip()
 
+MAX_SEARCH_RESULTS = 10
+
+def get_search_results(text, start=0):
+    BH_URL = 'http://216.58.158.10/search?q={}&output=xml_no_dtd&client=default_frontend&num=' + \
+             str(MAX_SEARCH_RESULTS) + '&oe=UTF-8&ie=UTF-8&site=biblecc&filter=0&start={}'
+
+    query = urllib.quote(text.lower().strip())
+    url = BH_URL.format(query, start)
+    try:
+        result = urlfetch.fetch(url, deadline=10)
+    except urlfetch_errors.Error as e:
+        logging.warning('Error fetching search results:\n' + str(e))
+        return None
+
+    xml = result.content
+    tree = etree.fromstring(xml)
+
+    results_body = ''
+    for result in tree.iterfind('RES/R'):
+        header = result.find('T').text
+        content = result.find('S').text
+
+        header = BeautifulSoup(header, 'lxml').text
+        idx = header.find(':')
+        idx += header[idx:].find(' ')
+        title = header[:idx].strip()
+
+        soup = BeautifulSoup(content, 'lxml')
+        for tag in soup('b'):
+            if tag.text == u'...':
+                continue
+            tag.string = '*' + tag.text + '*'
+        description = soup.text.strip()
+
+        link = '/' + ''.join(title.split()).lower().replace(':', 'V')
+
+        results_body += u'\U0001F539' + title + '\n' + description + '\n' + link + '\n\n'
+
+    if not results_body:
+        return None
+
+    final_text = 'Search results'
+
+    res = tree.find('RES')
+    sn = res.get('SN')
+    en = res.get('EN')
+    total = res.find('M').text
+
+    if start != int(sn) - 1:
+        return None
+
+    if int(total) > MAX_SEARCH_RESULTS:
+        final_text += ' ({}-{} of {})'.format(sn, en, total)
+
+    final_text += '\n\n' + results_body.strip()
+
+    if int(en) < int(total):
+        final_text += '\n\nGet /more results'
+
+    return final_text
+
 def other_version(current_version):
     if current_version == 'NASB':
         return 'NIV'
     return 'NASB'
 
 from secrets import TOKEN
-from versions import VERSION_DATA, VERSION_LOOKUP, VERSIONS
+from versions import VERSION_DATA, VERSION_LOOKUP, VERSIONS, BOOKS
 TELEGRAM_URL = 'https://api.telegram.org/bot' + TOKEN
 TELEGRAM_URL_SEND = TELEGRAM_URL + '/sendMessage'
 TELEGRAM_URL_CHAT_ACTION = TELEGRAM_URL + '/sendChatAction'
@@ -112,7 +174,7 @@ class User(db.Model):
     last_received = db.DateTimeProperty(auto_now_add=True, indexed=False)
     last_sent = db.DateTimeProperty(indexed=False)
     version = db.StringProperty(indexed=False, default='NIV')
-    reply_to = db.StringProperty(indexed=False)
+    reply_to = db.StringProperty(multiline=True, indexed=False)
 
     def get_uid(self):
         return self.key().name()
@@ -235,6 +297,9 @@ def send_message(user_or_uid, text, force_reply=False, markdown=False,
         elif handle_response(response, user, uid) == False:
             queue_message()
 
+    if text.strip() == '':
+        return
+
     if len(text) > 4096:
         chunks = textwrap.wrap(text, width=4096, replace_whitespace=False, drop_whitespace=False)
         i = 0
@@ -348,12 +413,19 @@ class MainPage(webapp2.RequestHandler):
 
         if text == None:
             return
+        text = text.strip()
 
-        def is_full_get_command():
+        def is_get_command():
             return text.lower().startswith('/get')
 
         def is_full_set_default_command():
             return text.lower().startswith('/setdefault ')
+
+        def is_full_search_command():
+            return text.lower().startswith('/search ')
+
+        def is_link_command():
+            return text[1:].startswith(BOOKS)
 
         def is_command(word):
             cmd = text.lower().strip()
@@ -364,12 +436,12 @@ class MainPage(webapp2.RequestHandler):
             return cmd == slash_word or short_cmd.startswith((left_pattern, right_pattern))
 
         if is_command('get'):
-            user.await_reply('/get')
+            user.await_reply('get')
             version = user.version
             send_message(user, self.GET_PASSAGE.format(version, other_version(version)),
                          force_reply=True, markdown=True)
 
-        elif is_full_get_command():
+        elif is_get_command():
             user.await_reply(None)
             words = text.split()
             first_word = words[0]
@@ -383,7 +455,7 @@ class MainPage(webapp2.RequestHandler):
 
             passage = text[len(first_word) + 1:].strip()
             if not passage:
-                user.await_reply(first_word)
+                user.await_reply(first_word[1:])
                 send_message(user, self.GET_PASSAGE.format(version, other_version(version)),
                              force_reply=True, markdown=True)
                 return
@@ -408,6 +480,20 @@ class MainPage(webapp2.RequestHandler):
 
             user.update_version(version)
             send_message(user, self.SET_DEFAULT_SUCCESS.format(version), markdown=True)
+
+        elif is_full_search_command():
+            search_term = text[8:].strip().lower()
+            user.await_reply('search0 ' + search_term)
+
+            send_typing(uid)
+            response = get_search_results(search_term)
+
+            if not response:
+                user.await_reply(None)
+                send_message(user, self.NO_RESULTS_FOUND.format(name))
+                return
+
+            send_message(user, response, markdown=True)
 
         elif is_command('setdefault') or raw_text == self.BACK_TO_LANGUAGES:
             user.await_reply(None)
@@ -436,8 +522,38 @@ class MainPage(webapp2.RequestHandler):
             user.await_reply(None)
             send_message(user, self.SETTINGS.format(user.version), markdown=True)
 
-        elif user.reply_to != None and user.reply_to.startswith('/get'):
-            version = user.reply_to[4:].upper()
+        elif is_link_command():
+            user.await_reply(None)
+            send_typing(uid)
+            response = get_passage(text[1:].replace('V', ':'), user.version)
+
+            if not response:
+                send_message(user, self.NO_RESULTS_FOUND.format(name))
+                return
+
+            send_message(user, response, markdown=True)
+
+        elif text == '/more' and user.reply_to != None and user.reply_to.startswith('search'):
+            idx = user.reply_to.find(' ')
+            old_start = int(user.reply_to[6:idx])
+            search_term = user.reply_to[idx + 1:]
+
+            new_start = old_start + MAX_SEARCH_RESULTS
+
+            user.await_reply('search{} '.format(new_start) + search_term)
+
+            send_typing(uid)
+            response = get_search_results(search_term, new_start)
+
+            if not response:
+                user.await_reply(None)
+                send_message(user, self.NO_RESULTS_FOUND.format(name))
+                return
+
+            send_message(user, response, markdown=True)
+
+        elif user.reply_to != None and user.reply_to.startswith('get'):
+            version = user.reply_to[3:].upper()
             user.await_reply(None)
             if not version:
                 version = user.version
