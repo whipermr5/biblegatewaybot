@@ -74,6 +74,11 @@ def get_passage(passage, version='NIV'):
 
     return final_text.strip()
 
+def other_version(current_version):
+    if current_version == 'NASB':
+        return 'NIV'
+    return 'NASB'
+
 from secrets import TOKEN
 from versions import VERSION_DATA, VERSION_LOOKUP, VERSIONS
 TELEGRAM_URL = 'https://api.telegram.org/bot' + TOKEN
@@ -263,11 +268,14 @@ def send_typing(uid):
 class MainPage(webapp2.RequestHandler):
     HELP = 'This bot can fetch bible passages from biblegateway.com.\n\n' + \
            'Commands:\n/get <reference>\n/get<version> <reference>\n/setdefault <version>\n\n' + \
-           'Examples:\n/get John 3:16\n/getnlt 1 cor 13:4-7\n/getcuvs ps23\n/setdefault nasb'
+           'Examples:\n/get John 3:16\n/getNLT 1 cor 13:4-7\n/getCUVS ps23\n/setdefault NASB'
 
     VERSION_NOT_FOUND = 'Sorry {}, I couldn\'t find that version. Use /setdefault to view all available versions.'
 
     BACK_TO_LANGUAGES = u'\U0001F519' + ' to language list'
+
+    GET_PASSAGE = 'Which bible passage do you want to lookup? Version: {}\n\n' + \
+                  'Tip: For faster results, use:\n/get John 3:16\n/get{} John 3:16'
 
     def get(self):
         self.response.headers['Content-Type'] = 'text/plain'
@@ -312,20 +320,11 @@ class MainPage(webapp2.RequestHandler):
         if text == None:
             return
 
-        def is_get_command():
+        def is_full_get_command():
             if not text:
                 return False
-
-            cmd = text.lower()
-
-            if not cmd.startswith('/get'):
+            if not text.lower().startswith('/get'):
                 return False
-
-            words = cmd.split()
-
-            if len(words) < 2:
-                return False
-
             return True
 
         def is_command(word):
@@ -335,25 +334,29 @@ class MainPage(webapp2.RequestHandler):
             return cmd == '/' + word or short_cmd.startswith(flexi_pattern)
 
         if is_command('get'):
-            user.await_reply('get')
-            send_message(user, 'Which bible passage do you want to lookup?\n\nTip: for faster lookup, use this format: /get John 3:16')
+            user.await_reply('/get')
+            version = user.version
+            send_message(user, self.GET_PASSAGE.format(version, other_version(version)), force_reply=True, markdown=True)
 
-        elif is_get_command():
+        elif is_full_get_command():
             user.await_reply(None)
             words = text.split()
             first_word = words[0]
+
             version = first_word[4:].upper()
             if not version:
                 version = user.version
-
             if version not in VERSIONS:
                 send_message(user, self.VERSION_NOT_FOUND.format(name), markdown=True)
                 return
 
-            passage = text[len(first_word) + 1:]
+            passage = text[len(first_word) + 1:].strip()
+            if not passage:
+                user.await_reply(first_word)
+                send_message(user, self.GET_PASSAGE.format(version, other_version(version)), force_reply=True, markdown=True)
+                return
 
             send_typing(uid)
-
             response = get_passage(passage, version)
 
             if not response:
@@ -395,13 +398,19 @@ class MainPage(webapp2.RequestHandler):
             user.await_reply(None)
             send_message(user, 'Current default version is *{}*. Use /setdefault to change it.'.format(user.version), markdown=True)
 
-        elif user.reply_to == 'get':
+        elif user.reply_to != None and user.reply_to.startswith('/get'):
+            version = user.reply_to[4:].upper()
             user.await_reply(None)
+            if not version:
+                version = user.version
+
             send_typing(uid)
-            response = get_passage(text, user.version)
+            response = get_passage(text, version)
+
             if not response:
                 send_message(user, 'Sorry {}, no results were found. Please try again.'.format(name))
                 return
+
             send_message(user, response, markdown=True)
 
         else:
