@@ -101,6 +101,7 @@ class User(db.Model):
     last_received = db.DateTimeProperty(auto_now_add=True, indexed=False)
     last_sent = db.DateTimeProperty(indexed=False)
     version = db.StringProperty(indexed=False, default='NIV')
+    reply_to = db.StringProperty(indexed=False)
 
     def get_uid(self):
         return self.key().name()
@@ -134,6 +135,10 @@ class User(db.Model):
 
     def update_version(self, version):
         self.version = version
+        self.put()
+
+    def await_reply(self, command):
+        self.reply_to = command
         self.put()
 
 def get_user(uid):
@@ -301,9 +306,20 @@ class MainPage(webapp2.RequestHandler):
                 response = 'Hello, {}!'.format(name)
             response += '\n\n' + self.HELP
             send_message(user, response, markdown=True, disable_web_page_preview=True)
+            user.await_reply(None)
             return
 
         if text == None:
+            return
+
+        if user.reply_to == 'get':
+            user.await_reply(None)
+            send_typing(uid)
+            response = get_passage(text, user.version)
+            if not response:
+                send_message(user, 'Sorry {}, no results were found. Please try again.'.format(name))
+                return
+            send_message(user, response, markdown=True)
             return
 
         def is_get_command():
@@ -328,7 +344,11 @@ class MainPage(webapp2.RequestHandler):
             flexi_pattern = ('/{}@biblegatewaybot'.format(word), '@biblegatewaybot/{}'.format(word))
             return cmd == '/' + word or short_cmd.startswith(flexi_pattern)
 
-        if is_get_command():
+        if is_command('get'):
+            user.await_reply('get')
+            send_message(user, 'Which bible passage do you want to lookup?\n\nTip: for faster lookup, use this format: /get John 3:16')
+
+        elif is_get_command():
             words = text.split()
             first_word = words[0]
             version = first_word[4:].upper()
