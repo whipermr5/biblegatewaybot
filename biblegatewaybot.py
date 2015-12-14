@@ -9,6 +9,8 @@ from google.appengine.ext import db
 from datetime import datetime
 from xml.etree import ElementTree as etree
 
+EMPTY = 'empty'
+
 def get_passage(passage, version='NIV'):
     def to_sup(text):
         sups = {u'0': u'\u2070',
@@ -37,7 +39,7 @@ def get_passage(passage, version='NIV'):
     soup = BeautifulSoup(html, 'lxml').select_one('.passage-text')
 
     if not soup:
-        return None
+        return EMPTY
 
     WANTED = 'bg-bot-passage-text'
     UNWANTED = '.passage-display, .footnote, .footnotes, .crossrefs, .publisher-info-bottom'
@@ -116,7 +118,7 @@ def get_search_results(text, start=0):
         results_body += u'\U0001F539' + title + '\n' + description + '\n' + link + '\n\n'
 
     if not results_body:
-        return None
+        return EMPTY
 
     final_text = 'Search results'
 
@@ -126,7 +128,7 @@ def get_search_results(text, start=0):
     total = res.find('M').text
 
     if start != int(sn) - 1:
-        return None
+        return EMPTY
 
     if int(total) > MAX_SEARCH_RESULTS:
         final_text += ' ({}-{} of {})'.format(sn, en, total)
@@ -355,6 +357,9 @@ class MainPage(webapp2.RequestHandler):
     UNRECOGNISED = 'Sorry {}, I couldn\'t understand that. ' + \
                    'Please enter one of the following commands:\n' + CMD_LIST
 
+    REMOTE_ERROR = 'Sorry {}, I\'m having some difficulty accessing the site. ' + \
+                   'Please try again later.'
+
     GET_PASSAGE = 'Which bible passage do you want to lookup? Version: {}\n\n' + \
                   'Tip: For faster results, use:\n/get John 3:16\n/get{} John 3:16'
 
@@ -463,8 +468,11 @@ class MainPage(webapp2.RequestHandler):
             send_typing(uid)
             response = get_passage(passage, version)
 
-            if not response:
+            if response == EMPTY:
                 send_message(user, self.NO_RESULTS_FOUND.format(name))
+                return
+            elif response == None:
+                send_message(user, self.REMOTE_ERROR.format(name))
                 return
 
             send_message(user, response, markdown=True)
@@ -488,9 +496,12 @@ class MainPage(webapp2.RequestHandler):
             send_typing(uid)
             response = get_search_results(search_term)
 
-            if not response:
+            if response == EMPTY:
                 user.await_reply(None)
                 send_message(user, self.NO_RESULTS_FOUND.format(name))
+                return
+            elif response == None:
+                send_message(user, self.REMOTE_ERROR.format(name))
                 return
 
             send_message(user, response, markdown=True)
@@ -527,8 +538,11 @@ class MainPage(webapp2.RequestHandler):
             send_typing(uid)
             response = get_passage(text[1:].replace('V', ':'), user.version)
 
-            if not response:
+            if response == EMPTY:
                 send_message(user, self.NO_RESULTS_FOUND.format(name))
+                return
+            elif response == None:
+                send_message(user, self.REMOTE_ERROR.format(name))
                 return
 
             send_message(user, response, markdown=True)
@@ -545,9 +559,12 @@ class MainPage(webapp2.RequestHandler):
             send_typing(uid)
             response = get_search_results(search_term, new_start)
 
-            if not response:
+            if response == EMPTY:
                 user.await_reply(None)
                 send_message(user, self.NO_RESULTS_FOUND.format(name))
+                return
+            elif response == None:
+                send_message(user, self.REMOTE_ERROR.format(name))
                 return
 
             send_message(user, response, markdown=True)
@@ -561,8 +578,11 @@ class MainPage(webapp2.RequestHandler):
             send_typing(uid)
             response = get_passage(text, version)
 
-            if not response:
+            if response == EMPTY:
                 send_message(user, self.NO_RESULTS_FOUND.format(name))
+                return
+            elif response == None:
+                send_message(user, self.REMOTE_ERROR.format(name))
                 return
 
             send_message(user, response, markdown=True)
