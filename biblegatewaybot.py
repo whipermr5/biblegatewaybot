@@ -6,23 +6,23 @@ import urllib
 from bs4 import BeautifulSoup
 from google.appengine.api import urlfetch, urlfetch_errors, taskqueue
 from google.appengine.ext import db
-from datetime import datetime, timedelta
-
-def to_sup(s):
-    sups = {u'0': u'\u2070',
-            u'1': u'\xb9',
-            u'2': u'\xb2',
-            u'3': u'\xb3',
-            u'4': u'\u2074',
-            u'5': u'\u2075',
-            u'6': u'\u2076',
-            u'7': u'\u2077',
-            u'8': u'\u2078',
-            u'9': u'\u2079',
-            u'-': u'\u207b'}
-    return ''.join(sups.get(char, char) for char in s)
+from datetime import datetime
 
 def get_passage(passage, version='NIV'):
+    def to_sup(text):
+        sups = {u'0': u'\u2070',
+                u'1': u'\xb9',
+                u'2': u'\xb2',
+                u'3': u'\xb3',
+                u'4': u'\u2074',
+                u'5': u'\u2075',
+                u'6': u'\u2076',
+                u'7': u'\u2077',
+                u'8': u'\u2078',
+                u'9': u'\u2079',
+                u'-': u'\u207b'}
+        return ''.join(sups.get(char, char) for char in text)
+
     BG_URL = 'https://www.biblegateway.com/passage/?search={}&version={}&interface=print'
 
     search = urllib.quote(passage.lower().strip())
@@ -38,20 +38,22 @@ def get_passage(passage, version='NIV'):
     if not soup:
         return None
 
-    PASSAGE_TEXT = 'bg-bot-passage-text'
+    WANTED = 'bg-bot-passage-text'
+    UNWANTED = '.passage-display, .footnote, .footnotes, .crossrefs, .publisher-info-bottom'
+
     title = soup.select_one('.passage-display-bcv').text
     header = '*' + title.strip() + '* (' + version + ')'
 
-    for tag in soup.select('.passage-display, .footnote, .footnotes, .crossrefs, .publisher-info-bottom'):
+    for tag in soup.select(UNWANTED):
         tag.decompose()
 
     for tag in soup.select('h1, h2, h3, h4, h5, h6'):
-        tag['class'] = PASSAGE_TEXT
+        tag['class'] = WANTED
         text = tag.text.strip().replace(' ', '\\')
         tag.string = '*' + text + '*'
 
     for tag in soup.select('p'):
-        tag['class'] = PASSAGE_TEXT
+        tag['class'] = WANTED
 
     for tag in soup.select('br'):
         tag.name = 'span'
@@ -69,7 +71,7 @@ def get_passage(passage, version='NIV'):
         tag.string = tag.text.rstrip()
 
     final_text = header + '\n\n'
-    for tag in soup(class_=PASSAGE_TEXT):
+    for tag in soup(class_=WANTED):
         final_text += tag.text.strip() + '\n\n'
 
     return final_text.strip()
@@ -97,6 +99,10 @@ RECOGNISED_ERRORS = ('[Error]: PEER_ID_INVALID',
                      '[Error]: Bad Request: group is deactivated',
                      '[Error]: Forbidden: bot was kicked from the group chat',
                      '[Error]: Forbidden: can\'t write to chat with deleted user')
+
+def telegram_post(data, deadline=3):
+    return urlfetch.fetch(url=TELEGRAM_URL_SEND, payload=data, method=urlfetch.POST,
+                          headers=JSON_HEADER, deadline=deadline)
 
 class User(db.Model):
     username = db.StringProperty(indexed=False)
@@ -168,10 +174,6 @@ def update_profile(uid, uname, fname, lname):
         user.put()
         return user
 
-def telegram_post(data, deadline=3):
-    return urlfetch.fetch(url=TELEGRAM_URL_SEND, payload=data, method=urlfetch.POST,
-                          headers=JSON_HEADER, deadline=deadline)
-
 def build_buttons(menu):
     buttons = []
     for item in menu:
@@ -181,7 +183,8 @@ def build_buttons(menu):
 def build_keyboard(buttons):
     return {'keyboard': buttons, 'one_time_keyboard': True}
 
-def send_message(user_or_uid, text, force_reply=False, markdown=False, disable_web_page_preview=False, custom_keyboard=None, hide_keyboard=False):
+def send_message(user_or_uid, text, force_reply=False, markdown=False,
+                 disable_web_page_preview=False, custom_keyboard=None, hide_keyboard=False):
     try:
         uid = str(user_or_uid.get_uid())
         user = user_or_uid
@@ -264,24 +267,43 @@ def send_typing(uid):
         rpc = urlfetch.create_rpc()
         urlfetch.make_fetch_call(rpc, url=TELEGRAM_URL_CHAT_ACTION, payload=data,
                                  method=urlfetch.POST, headers=JSON_HEADER)
-    except urlfetch_errors.Error as e:
+    except urlfetch_errors.Error:
         return
 
 class MainPage(webapp2.RequestHandler):
-    HELP = 'This bot can fetch bible passages from biblegateway.com.\n\n' + \
+    CMD_LIST = 'This bot can fetch bible passages from biblegateway.com.\n\n' + \
            'Commands:\n/get <reference>\n/get<version> <reference>\n/setdefault <version>\n\n' + \
            'Examples:\n/get John 3:16\n/getNLT 1 cor 13:4-7\n/getCUVS ps23\n/setdefault NASB'
 
-    VERSION_NOT_FOUND = 'Sorry {}, I couldn\'t find that version. Use /setdefault to view all available versions.'
+    WELCOME_GROUP = 'Hello, friends in {}! Thanks for adding me in!'
+    WELCOME_USER = 'Hello, {}! Welcome!'
+    WELCOME_GET_STARTED = '\n\n' + CMD_LIST
 
-    BACK_TO_LANGUAGES = u'\U0001F519' + ' to language list'
+    HELP = 'Hi {}! ' + CMD_LIST
+    UNRECOGNISED = 'Sorry {}, I couldn\'t understand that.\n\n' + CMD_LIST
 
     GET_PASSAGE = 'Which bible passage do you want to lookup? Version: {}\n\n' + \
                   'Tip: For faster results, use:\n/get John 3:16\n/get{} John 3:16'
 
+    NO_RESULTS_FOUND = 'Sorry {}, no results were found. Please try again.'
+    VERSION_NOT_FOUND = 'Sorry {}, I couldn\'t find that version. ' + \
+                        'Use /setdefault to view all available versions.'
+
+    SET_DEFAULT_CHOOSE_LANGUAGE = 'Choose a language:'
+    SET_DEFAULT_CHOOSE_VERSION = 'Select a version:'
+    SET_DEFAULT_SUCCESS = 'Success! Default version is now *{}*.'
+    SET_DEFAULT_FAILURE = VERSION_NOT_FOUND + '\n\nCurrent default is *{}*.'
+
+    SETTINGS = 'Current default version is *{}*. Use /setdefault to change it.'
+
+    BACK_TO_LANGUAGES = u'\U0001F519' + ' to language list'
+
+    BOT_USERNAME = 'biblegatewaybot'
+    BOT_HANDLE = '@' + BOT_USERNAME
+
     def get(self):
         self.response.headers['Content-Type'] = 'text/plain'
-        self.response.write('biblegatewaybot backend running...\n')
+        self.response.write(self.BOT_USERNAME + ' backend running...\n')
 
     def post(self):
         data = json.loads(self.request.body)
@@ -311,10 +333,10 @@ class MainPage(webapp2.RequestHandler):
 
         if user.last_sent == None or text == '/start':
             if user.is_group():
-                response = 'Hello, friends in {}! Thanks for adding me in!'.format(group_name)
+                response = self.WELCOME_GROUP.format(group_name)
             else:
-                response = 'Hello, {}!'.format(name)
-            response += '\n\n' + self.HELP
+                response = self.WELCOME_USER.format(name)
+            response += self.WELCOME_GET_STARTED
             send_message(user, response, markdown=True, disable_web_page_preview=True)
             user.await_reply(None)
             return
@@ -323,22 +345,24 @@ class MainPage(webapp2.RequestHandler):
             return
 
         def is_full_get_command():
-            if not text:
-                return False
-            if not text.lower().startswith('/get'):
-                return False
-            return True
+            return text.lower().startswith('/get')
+
+        def is_full_set_default_command():
+            return text.lower().startswith('/setdefault ')
 
         def is_command(word):
             cmd = text.lower().strip()
             short_cmd = ''.join(cmd.split())
-            flexi_pattern = ('/{}@biblegatewaybot'.format(word), '@biblegatewaybot/{}'.format(word))
-            return cmd == '/' + word or short_cmd.startswith(flexi_pattern)
+            slash_word = '/' + word
+            left_pattern = slash_word + self.BOT_HANDLE
+            right_pattern = self.BOT_HANDLE + slash_word
+            return cmd == slash_word or short_cmd.startswith((left_pattern, right_pattern))
 
         if is_command('get'):
             user.await_reply('/get')
             version = user.version
-            send_message(user, self.GET_PASSAGE.format(version, other_version(version)), force_reply=True, markdown=True)
+            send_message(user, self.GET_PASSAGE.format(version, other_version(version)),
+                         force_reply=True, markdown=True)
 
         elif is_full_get_command():
             user.await_reply(None)
@@ -355,50 +379,57 @@ class MainPage(webapp2.RequestHandler):
             passage = text[len(first_word) + 1:].strip()
             if not passage:
                 user.await_reply(first_word)
-                send_message(user, self.GET_PASSAGE.format(version, other_version(version)), force_reply=True, markdown=True)
+                send_message(user, self.GET_PASSAGE.format(version, other_version(version)),
+                             force_reply=True, markdown=True)
                 return
 
             send_typing(uid)
             response = get_passage(passage, version)
 
             if not response:
-                send_message(user, 'Sorry {}, no results were found. Please try again.'.format(name))
+                send_message(user, self.NO_RESULTS_FOUND.format(name))
                 return
 
             send_message(user, response, markdown=True)
 
-        elif text.lower().startswith('/setdefault '):
+        elif is_full_set_default_command():
             user.await_reply(None)
             version = text[12:].strip().upper()
 
             if version not in VERSIONS:
-                send_message(user, self.VERSION_NOT_FOUND.format(name) + '\n\nCurrent default is *{}*.'.format(user.version), markdown=True)
+                send_message(user, self.SET_DEFAULT_FAILURE.format(name, user.version),
+                             markdown=True)
                 return
 
             user.update_version(version)
-            send_message(user, 'Success! Default version is now *{}*.'.format(version), markdown=True)
+            send_message(user, self.SET_DEFAULT_SUCCESS.format(version), markdown=True)
 
         elif is_command('setdefault') or raw_text == self.BACK_TO_LANGUAGES:
             user.await_reply(None)
-            send_message(user, 'Choose a language:', custom_keyboard=build_keyboard(build_buttons(VERSION_DATA.keys())))
+            buttons = build_buttons(VERSION_DATA.keys())
+            keyboard = build_keyboard(buttons)
+            send_message(user, self.SET_DEFAULT_CHOOSE_LANGUAGE, custom_keyboard=keyboard)
 
         elif raw_text in VERSION_DATA:
             user.await_reply(None)
-            send_message(user, 'Select a version:', custom_keyboard=build_keyboard(build_buttons(VERSION_DATA[raw_text] + [self.BACK_TO_LANGUAGES])))
+            buttons = build_buttons(VERSION_DATA[raw_text] + [self.BACK_TO_LANGUAGES])
+            keyboard = build_keyboard(buttons)
+            send_message(user, self.SET_DEFAULT_CHOOSE_VERSION, custom_keyboard=keyboard)
 
         elif raw_text in VERSION_LOOKUP:
             user.await_reply(None)
             version = VERSION_LOOKUP[raw_text]
             user.update_version(version)
-            send_message(user, 'Success! Default version is now *{}*.'.format(version), markdown=True, hide_keyboard=True)
+            send_message(user, self.SET_DEFAULT_SUCCESS.format(version), markdown=True,
+                         hide_keyboard=True)
 
         elif is_command('help'):
             user.await_reply(None)
-            send_message(user, 'Hi {}! '.format(name) + self.HELP, markdown=True, disable_web_page_preview=True)
+            send_message(user, self.HELP.format(name), markdown=True, disable_web_page_preview=True)
 
         elif is_command('settings'):
             user.await_reply(None)
-            send_message(user, 'Current default version is *{}*. Use /setdefault to change it.'.format(user.version), markdown=True)
+            send_message(user, self.SETTINGS.format(user.version), markdown=True)
 
         elif user.reply_to != None and user.reply_to.startswith('/get'):
             version = user.reply_to[4:].upper()
@@ -410,17 +441,18 @@ class MainPage(webapp2.RequestHandler):
             response = get_passage(text, version)
 
             if not response:
-                send_message(user, 'Sorry {}, no results were found. Please try again.'.format(name))
+                send_message(user, self.NO_RESULTS_FOUND.format(name))
                 return
 
             send_message(user, response, markdown=True)
 
         else:
             user.await_reply(None)
-            if user.is_group() and '@biblegatewaybot' not in text:
+            if user.is_group() and self.BOT_HANDLE not in text:
                 return
 
-            send_message(user, 'Sorry {}, I couldn\'t understand that.\n\n'.format(name) + self.HELP, markdown=True, disable_web_page_preview=True)
+            send_message(user, self.UNRECOGNISED.format(name), markdown=True,
+                         disable_web_page_preview=True)
 
 class MessagePage(webapp2.RequestHandler):
     def post(self):
