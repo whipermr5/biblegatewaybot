@@ -9,6 +9,10 @@ handlers:
   script: biblegatewaybot.app
   login: admin
 
+- url: /favicon.ico
+  static_files: favicon.ico
+  upload: favicon.ico
+
 - url: .*
   script: biblegatewaybot.app
 
