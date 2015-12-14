@@ -271,16 +271,24 @@ def send_typing(uid):
         return
 
 class MainPage(webapp2.RequestHandler):
-    CMD_LIST = 'This bot can fetch bible passages from biblegateway.com.\n\n' + \
-           'Commands:\n/get <reference>\n/get<version> <reference>\n/setdefault <version>\n\n' + \
-           'Examples:\n/get John 3:16\n/getNLT 1 cor 13:4-7\n/getCUVS ps23\n/setdefault NASB'
+    BOT_USERNAME = 'biblegatewaybot'
+    BOT_HANDLE = '@' + BOT_USERNAME
+    BOT_DESCRIPTION = 'This bot can fetch bible passages from biblegateway.com.'
+
+    CMD_LIST = '/get <reference>\n/get<version> <reference>\n/setdefault <version>\n\n' + \
+               'Examples:\n/get John 3:16\n/getNLT 1 cor 13:4-7\n/getCUVS ps23\n/setdefault NASB'
 
     WELCOME_GROUP = 'Hello, friends in {}! Thanks for adding me in!'
     WELCOME_USER = 'Hello, {}! Welcome!'
-    WELCOME_GET_STARTED = '\n\n' + CMD_LIST
+    WELCOME_GET_STARTED = ' ' + BOT_DESCRIPTION + \
+                          '\n\nTo get started, enter one of the following commands:\n' + CMD_LIST
 
-    HELP = 'Hi {}! ' + CMD_LIST
-    UNRECOGNISED = 'Sorry {}, I couldn\'t understand that.\n\n' + CMD_LIST
+    HELP = 'Hi {}! Please enter one of the following commands:\n' + CMD_LIST + '\n\n' + \
+           'Enjoy using BibleGateway Bot? Click the link below to rate it!\n' + \
+           'https://telegram.me/storebot?start=' + BOT_USERNAME
+
+    UNRECOGNISED = 'Sorry {}, I couldn\'t understand that. ' + \
+                   'Please enter one of the following commands:\n' + CMD_LIST
 
     GET_PASSAGE = 'Which bible passage do you want to lookup? Version: {}\n\n' + \
                   'Tip: For faster results, use:\n/get John 3:16\n/get{} John 3:16'
@@ -297,9 +305,6 @@ class MainPage(webapp2.RequestHandler):
     SETTINGS = 'Current default version is *{}*. Use /setdefault to change it.'
 
     BACK_TO_LANGUAGES = u'\U0001F519' + ' to language list'
-
-    BOT_USERNAME = 'biblegatewaybot'
-    BOT_HANDLE = '@' + BOT_USERNAME
 
     def get(self):
         self.response.headers['Content-Type'] = 'text/plain'
