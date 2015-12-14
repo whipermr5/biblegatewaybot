@@ -536,8 +536,12 @@ class MainPage(webapp2.RequestHandler):
 
         elif is_link_command():
             user.await_reply(None)
+            passage = text[1:].replace('V', ':')
+            if passage.endswith(self.BOT_HANDLE):
+                passage = passage[:-len(self.BOT_HANDLE)]
+
             send_typing(uid)
-            response = get_passage(text[1:].replace('V', ':'), user.version)
+            response = get_passage(passage, user.version)
 
             if response == EMPTY:
                 send_message(user, self.NO_RESULTS_FOUND.format(name))
@@ -548,7 +552,8 @@ class MainPage(webapp2.RequestHandler):
 
             send_message(user, response, markdown=True)
 
-        elif text == '/more' and user.reply_to != None and user.reply_to.startswith('search'):
+        elif text in ('/more', '/more' + self.BOT_HANDLE) and user.reply_to != None and \
+             user.reply_to.startswith('search'):
             idx = user.reply_to.find(' ')
             old_start = int(user.reply_to[6:idx])
             search_term = user.reply_to[idx + 1:]
