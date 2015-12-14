@@ -363,6 +363,10 @@ class MainPage(webapp2.RequestHandler):
     GET_PASSAGE = 'Which bible passage do you want to lookup? Version: {}\n\n' + \
                   'Tip: For faster results, use:\n/get John 3:16\n/get{} John 3:16'
 
+    GET_SEARCH_TERM = 'Please enter what you wish to search for.\n\n' + \
+                      'Tip: For faster results, use:\n/search the greatest commandment\n' + \
+                      '/search "love is patient" _(quotes to match exact phrase)_'
+
     NO_RESULTS_FOUND = 'Sorry {}, no results were found. Please try again.'
     VERSION_NOT_FOUND = 'Sorry {}, I couldn\'t find that version. ' + \
                         'Use /setdefault to view all available versions.'
@@ -445,7 +449,11 @@ class MainPage(webapp2.RequestHandler):
             user.await_reply('get')
             version = user.version
             send_message(user, self.GET_PASSAGE.format(version, other_version(version)),
-                         force_reply=True, markdown=True)
+                         force_reply=True)
+
+        if is_command('search'):
+            user.await_reply('search')
+            send_message(user, self.GET_SEARCH_TERM, force_reply=True, markdown=True)
 
         elif is_get_command():
             user.await_reply(None)
@@ -564,6 +572,23 @@ class MainPage(webapp2.RequestHandler):
 
             send_typing(uid)
             response = get_search_results(search_term, new_start)
+
+            if response == EMPTY:
+                user.await_reply(None)
+                send_message(user, self.NO_RESULTS_FOUND.format(name))
+                return
+            elif response == None:
+                send_message(user, self.REMOTE_ERROR.format(name))
+                return
+
+            send_message(user, response, markdown=True)
+
+        elif user.reply_to != None and user.reply_to == 'search':
+            search_term = text
+            user.await_reply('search0 ' + search_term)
+
+            send_typing(uid)
+            response = get_search_results(search_term)
 
             if response == EMPTY:
                 user.await_reply(None)
