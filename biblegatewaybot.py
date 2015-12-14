@@ -405,6 +405,7 @@ class MainPage(webapp2.RequestHandler):
         else:
             group_name = msg_chat.get('title')
             user = update_profile(uid, None, group_name, None)
+            group_name = group_name.encode('utf-8', 'ignore')
 
         if user.last_sent == None or text == '/start':
             if user.is_group():
