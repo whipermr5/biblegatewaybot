@@ -342,8 +342,10 @@ class MainPage(webapp2.RequestHandler):
     BOT_HANDLE = '@' + BOT_USERNAME
     BOT_DESCRIPTION = 'This bot can fetch bible passages from biblegateway.com.'
 
-    CMD_LIST = '/get <reference>\n/get<version> <reference>\n/setdefault <version>\n\n' + \
-               'Examples:\n/get John 3:16\n/getNLT 1 cor 13:4-7\n/getCUVS ps23\n/setdefault NASB'
+    CMD_LIST = '/get <reference>\n/get<version> <reference>\n' + \
+               '/search <keyword>\n/setdefault <version>\n\n' + \
+               'Examples:\n/get John 3:16\n/getNLT 1 cor 13:4-7\n' + \
+               '/search the greatest commandment\n/setdefault NASB'
 
     WELCOME_GROUP = 'Hello, friends in {}! Thanks for adding me in!'
     WELCOME_USER = 'Hello, {}! Welcome!'
@@ -364,7 +366,7 @@ class MainPage(webapp2.RequestHandler):
                   'Tip: For faster results, use:\n/get John 3:16\n/get{} John 3:16'
 
     GET_SEARCH_TERM = 'Please enter what you wish to search for.\n\n' + \
-                      'Tip: For faster results, use:\n/search the greatest commandment\n' + \
+                      'Tip: For faster results, use:\n/search make disciples\n' + \
                       '/search "love is patient" _(quotes to match exact phrase)_'
 
     NO_RESULTS_FOUND = 'Sorry {}, no results were found. Please try again.'
