@@ -262,7 +262,7 @@ def send_typing(uid):
 
 class MainPage(webapp2.RequestHandler):
     HELP = 'This bot can fetch bible passages from biblegateway.com.\n\n' + \
-           'Commands:\n/get <reference>\n/get<version> <reference>\n/setdefault\n/setdefault <version>\n\n' + \
+           'Commands:\n/get <reference>\n/get<version> <reference>\n/setdefault <version>\n\n' + \
            'Examples:\n/get John 3:16\n/getnlt 1 cor 13:4-7\n/getcuvs ps23\n/setdefault nasb'
 
     VERSION_NOT_FOUND = 'Sorry {}, I couldn\'t find that version. Use /setdefault to view all available versions.'
@@ -312,16 +312,6 @@ class MainPage(webapp2.RequestHandler):
         if text == None:
             return
 
-        if user.reply_to == 'get':
-            user.await_reply(None)
-            send_typing(uid)
-            response = get_passage(text, user.version)
-            if not response:
-                send_message(user, 'Sorry {}, no results were found. Please try again.'.format(name))
-                return
-            send_message(user, response, markdown=True)
-            return
-
         def is_get_command():
             if not text:
                 return False
@@ -349,6 +339,7 @@ class MainPage(webapp2.RequestHandler):
             send_message(user, 'Which bible passage do you want to lookup?\n\nTip: for faster lookup, use this format: /get John 3:16')
 
         elif is_get_command():
+            user.await_reply(None)
             words = text.split()
             first_word = words[0]
             version = first_word[4:].upper()
@@ -372,6 +363,7 @@ class MainPage(webapp2.RequestHandler):
             send_message(user, response, markdown=True)
 
         elif text.lower().startswith('/setdefault '):
+            user.await_reply(None)
             version = text[12:].strip().upper()
 
             if version not in VERSIONS:
@@ -382,23 +374,38 @@ class MainPage(webapp2.RequestHandler):
             send_message(user, 'Success! Default version is now *{}*.'.format(version), markdown=True)
 
         elif is_command('setdefault') or raw_text == self.BACK_TO_LANGUAGES:
+            user.await_reply(None)
             send_message(user, 'Choose a language:', custom_keyboard=build_keyboard(build_buttons(VERSION_DATA.keys())))
 
         elif raw_text in VERSION_DATA:
+            user.await_reply(None)
             send_message(user, 'Select a version:', custom_keyboard=build_keyboard(build_buttons(VERSION_DATA[raw_text] + [self.BACK_TO_LANGUAGES])))
 
         elif raw_text in VERSION_LOOKUP:
+            user.await_reply(None)
             version = VERSION_LOOKUP[raw_text]
             user.update_version(version)
             send_message(user, 'Success! Default version is now *{}*.'.format(version), markdown=True)
 
         elif is_command('help'):
+            user.await_reply(None)
             send_message(user, 'Hi {}! '.format(name) + self.HELP, markdown=True, disable_web_page_preview=True)
 
         elif is_command('settings'):
+            user.await_reply(None)
             send_message(user, 'Current default version is *{}*. Use /setdefault to change it.'.format(user.version), markdown=True)
 
+        elif user.reply_to == 'get':
+            user.await_reply(None)
+            send_typing(uid)
+            response = get_passage(text, user.version)
+            if not response:
+                send_message(user, 'Sorry {}, no results were found. Please try again.'.format(name))
+                return
+            send_message(user, response, markdown=True)
+
         else:
+            user.await_reply(None)
             if user.is_group() and '@biblegatewaybot' not in text:
                 return
 
