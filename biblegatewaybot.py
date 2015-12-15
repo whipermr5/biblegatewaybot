@@ -4,6 +4,7 @@ import json
 import textwrap
 import urllib
 from bs4 import BeautifulSoup
+from scriptures import extract as extract_refs
 from google.appengine.api import urlfetch, urlfetch_errors, taskqueue
 from google.appengine.ext import db
 from datetime import datetime
@@ -624,6 +625,19 @@ class MainPage(webapp2.RequestHandler):
             user.await_reply(None)
             if user.is_group() and self.BOT_HANDLE not in text:
                 return
+
+            to_lookup = text.lower().replace(self.BOT_HANDLE, '')
+            refs = extract_refs(to_lookup)
+            if refs:
+                ref = refs[0]
+                passage = '{} {}:{}-{}:{}'.format(ref[0], ref[1], ref[2], ref[3], ref[4])
+
+                send_typing(uid)
+                response = get_passage(passage, user.version)
+
+                if response and response != EMPTY:
+                    send_message(user, response, markdown=True)
+                    return
 
             send_message(user, self.UNRECOGNISED.format(name), markdown=True,
                          disable_web_page_preview=True)
