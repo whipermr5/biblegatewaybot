@@ -502,7 +502,7 @@ class MainPage(webapp2.RequestHandler):
 
         elif is_full_search_command():
             search_term = text[8:].strip().lower()
-            user.await_reply('search0 ' + search_term)
+            user.await_reply('search0 ' + raw_text[8:].strip().lower())
 
             send_typing(uid)
             response = get_search_results(search_term)
@@ -587,7 +587,7 @@ class MainPage(webapp2.RequestHandler):
 
         elif user.reply_to != None and user.reply_to == 'search':
             search_term = text
-            user.await_reply('search0 ' + search_term)
+            user.await_reply('search0 ' + raw_text)
 
             send_typing(uid)
             response = get_search_results(search_term)
