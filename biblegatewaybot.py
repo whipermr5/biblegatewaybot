@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup
 from scriptures import extract as extract_refs
 from google.appengine.api import urlfetch, urlfetch_errors, taskqueue
 from google.appengine.ext import db
-from datetime import datetime
+from datetime import datetime, timedelta
 from xml.etree import ElementTree as etree
 
 EMPTY = 'empty'
@@ -146,18 +146,23 @@ def other_version(current_version):
         return 'NIV'
     return 'NASB'
 
-from secrets import TOKEN
+from secrets import TOKEN, ADMIN_ID
 from versions import VERSION_DATA, VERSION_LOOKUP, VERSIONS, BOOKS
 TELEGRAM_URL = 'https://api.telegram.org/bot' + TOKEN
 TELEGRAM_URL_SEND = TELEGRAM_URL + '/sendMessage'
 TELEGRAM_URL_CHAT_ACTION = TELEGRAM_URL + '/sendChatAction'
 JSON_HEADER = {'Content-Type': 'application/json;charset=utf-8'}
 
-LOG_SENT = 'Message {} sent to uid {} ({})'
-LOG_ENQUEUED = 'Enqueued message to uid {} ({})'
-LOG_DID_NOT_SEND = 'Did not send message to uid {} ({}): {}'
-LOG_ERROR_SENDING = 'Error sending message to uid {} ({}):\n{}'
+LOG_SENT = '{} {} sent to uid {} ({})'
+LOG_ENQUEUED = 'Enqueued {} to uid {} ({})'
+LOG_DID_NOT_SEND = 'Did not send {} to uid {} ({}): {}'
+LOG_ERROR_SENDING = 'Error sending {} to uid {} ({}):\n{}'
 LOG_ERROR_DATASTORE = 'Error reading from datastore:\n'
+LOG_ERROR_INVALID_LINK = 'Invalid link! Link: '
+LOG_TYPE_START_NEW = 'Type: Start (new user)'
+LOG_TYPE_START_EXISTING = 'Type: Start (existing user)'
+LOG_TYPE_NON_TEXT = 'Type: Non-text'
+LOG_UNRECOGNISED = 'Unrecognised'
 
 RECOGNISED_ERRORS = ('[Error]: PEER_ID_INVALID',
                      '[Error]: Bot was kicked from a chat',
@@ -178,6 +183,7 @@ class User(db.Model):
     last_sent = db.DateTimeProperty(indexed=False)
     version = db.StringProperty(indexed=False, default='NIV')
     reply_to = db.StringProperty(multiline=True, indexed=False)
+    promo = db.BooleanProperty(default=False)
 
     def get_uid(self):
         return self.key().name()
@@ -200,6 +206,10 @@ class User(db.Model):
 
     def is_group(self):
         return int(self.get_uid()) < 0
+
+    def set_promo(self, promo):
+        self.promo = promo
+        self.put()
 
     def update_last_received(self):
         self.last_received = datetime.now()
@@ -248,8 +258,8 @@ def build_buttons(menu):
 def build_keyboard(buttons):
     return {'keyboard': buttons, 'one_time_keyboard': True}
 
-def send_message(user_or_uid, text, force_reply=False, markdown=False,
-                 disable_web_page_preview=False, custom_keyboard=None, hide_keyboard=False):
+def send_message(user_or_uid, text, msg_type='message', force_reply=False, markdown=False,
+                 disable_web_page_preview=True, custom_keyboard=None, hide_keyboard=False):
     try:
         uid = str(user_or_uid.get_uid())
         user = user_or_uid
@@ -269,7 +279,7 @@ def send_message(user_or_uid, text, force_reply=False, markdown=False,
             build['reply_markup'] = custom_keyboard
         elif hide_keyboard:
             build['reply_markup'] = {'hide_keyboard': True}
-        if markdown:
+        if markdown or msg_type in ('passage', 'result'):
             build['parse_mode'] = 'Markdown'
         if disable_web_page_preview:
             build['disable_web_page_preview'] = True
@@ -277,14 +287,24 @@ def send_message(user_or_uid, text, force_reply=False, markdown=False,
         data = json.dumps(build)
 
         def queue_message():
-            payload = json.dumps({'data': data})
+            payload = json.dumps({
+                'msg_type': msg_type,
+                'data': data
+            })
             taskqueue.add(url='/message', payload=payload, countdown=countdown)
-            logging.info(LOG_ENQUEUED.format(uid, user.get_description()))
+            logging.info(LOG_ENQUEUED.format(msg_type, uid, user.get_description()))
+
+        if msg_type in ('promo', 'mass'):
+            if msg_type == 'promo':
+                user.set_promo(True)
+
+            queue_message()
+            return
 
         try:
             result = telegram_post(data)
         except urlfetch_errors.Error as e:
-            logging.warning(LOG_ERROR_SENDING.format(uid, user.get_description(), str(e)))
+            logging.warning(LOG_ERROR_SENDING.format(msg_type, uid, user.get_description(), str(e)))
             queue_message()
             return
 
@@ -297,7 +317,7 @@ def send_message(user_or_uid, text, force_reply=False, markdown=False,
             data = json.dumps(build)
             queue_message()
 
-        elif handle_response(response, user, uid) == False:
+        elif handle_response(response, user, uid, msg_type) == False:
             queue_message()
 
     if text.strip() == '':
@@ -312,20 +332,23 @@ def send_message(user_or_uid, text, force_reply=False, markdown=False,
     else:
         send_short_message(text)
 
-def handle_response(response, user, uid):
+def handle_response(response, user, uid, msg_type):
     if response.get('ok') == True:
         msg_id = str(response.get('result').get('message_id'))
-        logging.info(LOG_SENT.format(msg_id, uid, user.get_description()))
+        logging.info(LOG_SENT.format(msg_type.capitalize(), msg_id, uid, user.get_description()))
         user.update_last_sent()
 
     else:
         error_description = str(response.get('description'))
         if error_description not in RECOGNISED_ERRORS:
-            logging.warning(LOG_ERROR_SENDING.format(uid, user.get_description(),
+            logging.warning(LOG_ERROR_SENDING.format(msg_type, uid, user.get_description(),
                                                      error_description))
             return False
 
-        logging.info(LOG_DID_NOT_SEND.format(uid, user.get_description(), error_description))
+        logging.info(LOG_DID_NOT_SEND.format(msg_type, uid, user.get_description(),
+                                             error_description))
+        if msg_type == 'promo':
+            user.set_promo(False)
 
     return True
 
@@ -414,17 +437,41 @@ class MainPage(webapp2.RequestHandler):
             user = update_profile(uid, None, group_name, None)
             group_name = group_name.encode('utf-8', 'ignore')
 
+        def get_from_string():
+            name_string = name
+            if last_name:
+                name_string += ' ' + last_name.encode('utf-8', 'ignore').strip()
+            if username:
+                name_string += ' @' + username.encode('utf-8', 'ignore').strip()
+            return name_string
+
         if user.last_sent == None or text == '/start':
+            if user.last_sent == None:
+                logging.info(LOG_TYPE_START_NEW)
+                new_user = True
+            else:
+                logging.info(LOG_TYPE_START_EXISTING)
+                new_user = False
+
             if user.is_group():
                 response = self.WELCOME_GROUP.format(group_name)
             else:
                 response = self.WELCOME_USER.format(name)
             response += self.WELCOME_GET_STARTED
-            send_message(user, response, markdown=True, disable_web_page_preview=True)
+            send_message(user, response, msg_type='welcome')
             user.await_reply(None)
+
+            if new_user:
+                if user.is_group():
+                    new_alert = 'New group: "{}" via user: {}'.format(group_name, get_from_string())
+                else:
+                    new_alert = 'New user: ' + get_from_string()
+                send_message(ADMIN_ID, new_alert)
+
             return
 
         if text == None:
+            logging.info(LOG_TYPE_NON_TEXT)
             return
         text = text.strip()
 
@@ -467,14 +514,14 @@ class MainPage(webapp2.RequestHandler):
             if not version:
                 version = user.version
             if version not in VERSIONS:
-                send_message(user, self.VERSION_NOT_FOUND.format(name), markdown=True)
+                send_message(user, self.VERSION_NOT_FOUND.format(name))
                 return
 
             passage = text[len(first_word) + 1:].strip()
             if not passage:
                 user.await_reply(first_word[1:])
                 send_message(user, self.GET_PASSAGE.format(version, other_version(version)),
-                             force_reply=True, markdown=True)
+                             force_reply=True)
                 return
 
             send_typing(uid)
@@ -487,7 +534,7 @@ class MainPage(webapp2.RequestHandler):
                 send_message(user, self.REMOTE_ERROR.format(name))
                 return
 
-            send_message(user, response, markdown=True)
+            send_message(user, response, msg_type='passage')
 
         elif is_full_set_default_command():
             user.await_reply(None)
@@ -516,7 +563,7 @@ class MainPage(webapp2.RequestHandler):
                 send_message(user, self.REMOTE_ERROR.format(name))
                 return
 
-            send_message(user, response, markdown=True)
+            send_message(user, response, msg_type='result')
 
         elif is_command('setdefault') or raw_text == self.BACK_TO_LANGUAGES:
             user.await_reply(None)
@@ -539,7 +586,7 @@ class MainPage(webapp2.RequestHandler):
 
         elif is_command('help'):
             user.await_reply(None)
-            send_message(user, self.HELP.format(name), markdown=True, disable_web_page_preview=True)
+            send_message(user, self.HELP.format(name))
 
         elif is_command('settings'):
             user.await_reply(None)
@@ -556,12 +603,13 @@ class MainPage(webapp2.RequestHandler):
 
             if response == EMPTY:
                 send_message(user, self.NO_RESULTS_FOUND.format(name))
+                logging.error(LOG_ERROR_INVALID_LINK + text)
                 return
             elif response == None:
                 send_message(user, self.REMOTE_ERROR.format(name))
                 return
 
-            send_message(user, response, markdown=True)
+            send_message(user, response, msg_type='passage')
 
         elif text in ('/more', '/more' + self.BOT_HANDLE) and user.reply_to != None and \
              user.reply_to.startswith('search'):
@@ -584,7 +632,7 @@ class MainPage(webapp2.RequestHandler):
                 send_message(user, self.REMOTE_ERROR.format(name))
                 return
 
-            send_message(user, response, markdown=True)
+            send_message(user, response, msg_type='result')
 
         elif user.reply_to != None and user.reply_to == 'search':
             search_term = text
@@ -601,7 +649,7 @@ class MainPage(webapp2.RequestHandler):
                 send_message(user, self.REMOTE_ERROR.format(name))
                 return
 
-            send_message(user, response, markdown=True)
+            send_message(user, response, msg_type='result')
 
         elif user.reply_to != None and user.reply_to.startswith('get'):
             version = user.reply_to[3:].upper()
@@ -619,7 +667,7 @@ class MainPage(webapp2.RequestHandler):
                 send_message(user, self.REMOTE_ERROR.format(name))
                 return
 
-            send_message(user, response, markdown=True)
+            send_message(user, response, msg_type='passage')
 
         else:
             user.await_reply(None)
@@ -636,15 +684,16 @@ class MainPage(webapp2.RequestHandler):
                 response = get_passage(passage, user.version)
 
                 if response and response != EMPTY:
-                    send_message(user, response, markdown=True)
+                    send_message(user, response, msg_type='passage')
                     return
 
-            send_message(user, self.UNRECOGNISED.format(name), markdown=True,
-                         disable_web_page_preview=True)
+            logging.info(LOG_UNRECOGNISED)
+            send_message(user, self.UNRECOGNISED.format(name))
 
 class MessagePage(webapp2.RequestHandler):
     def post(self):
         params = json.loads(self.request.body)
+        msg_type = params.get('msg_type')
         data = params.get('data')
         uid = str(json.loads(data).get('chat_id'))
         user = get_user(uid)
@@ -652,13 +701,13 @@ class MessagePage(webapp2.RequestHandler):
         try:
             result = telegram_post(data, 4)
         except urlfetch_errors.Error as e:
-            logging.warning(LOG_ERROR_SENDING.format(uid, user.get_description(), str(e)))
+            logging.warning(LOG_ERROR_SENDING.format(msg_type, uid, user.get_description(), str(e)))
             logging.debug(data)
             self.abort(502)
 
         response = json.loads(result.content)
 
-        if handle_response(response, user, uid) == False:
+        if handle_response(response, user, uid, msg_type) == False:
             logging.debug(data)
             self.abort(502)
 
@@ -667,9 +716,30 @@ class MigratePage(webapp2.RequestHandler):
         self.response.headers['Content-Type'] = 'text/plain'
         self.response.write('Migrate page\n')
 
+class PromoPage(webapp2.RequestHandler):
+    def get(self):
+        taskqueue.add(url='/promo')
+
+    def post(self):
+        three_days_ago = datetime.now() - timedelta(days=3)
+        query = User.all()
+        query.filter('promo =', False)
+        query.filter('created <', three_days_ago)
+        for user in query.run(batch_size=500):
+            name = user.first_name.encode('utf-8', 'ignore').strip()
+            if user.is_group():
+                promo_msg = 'Hello, friends in {}! ' + \
+                'Do you find BibleGateway Bot useful?'.format(name)
+            else:
+                promo_msg = 'Hi {}, do you find BibleGateway Bot useful?'.format(name)
+            promo_msg += ' Why not rate it on the bot store (you don\'t have to exit' + \
+                         ' Telegram)!\nhttps://telegram.me/storebot?start=biblegatewaybot'
+            send_message(user, promo_msg, msg_type='promo')
+
 app = webapp2.WSGIApplication([
     ('/', MainPage),
     ('/' + TOKEN, MainPage),
     ('/message', MessagePage),
+    ('/promo', PromoPage),
     ('/migrate', MigratePage),
 ], debug=True)
