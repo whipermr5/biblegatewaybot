@@ -162,7 +162,7 @@ LOG_ERROR_INVALID_LINK = 'Invalid link! Link: '
 LOG_TYPE_START_NEW = 'Type: Start (new user)'
 LOG_TYPE_START_EXISTING = 'Type: Start (existing user)'
 LOG_TYPE_NON_TEXT = 'Type: Non-text'
-LOG_UNRECOGNISED = 'Unrecognised'
+LOG_UNRECOGNISED = 'Type: Unrecognised'
 
 RECOGNISED_ERRORS = ('[Error]: PEER_ID_INVALID',
                      '[Error]: Bot was kicked from a chat',
@@ -428,6 +428,7 @@ class MainPage(webapp2.RequestHandler):
         raw_text = text
         if text:
             text = text.encode('utf-8', 'ignore')
+            logging.info(text)
 
         if msg_chat.get('type') == 'private':
             group_name = name
