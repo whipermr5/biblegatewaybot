@@ -146,7 +146,7 @@ def other_version(current_version):
         return 'NIV'
     return 'NASB'
 
-from secrets import TOKEN, ADMIN_ID
+from secrets import TOKEN, ADMIN_ID, BOT_ID
 from versions import VERSION_DATA, VERSION_LOOKUP, VERSIONS, BOOKS
 TELEGRAM_URL = 'https://api.telegram.org/bot' + TOKEN
 TELEGRAM_URL_SEND = TELEGRAM_URL + '/sendMessage'
@@ -524,6 +524,11 @@ class MainPage(webapp2.RequestHandler):
                 send_message(user, self.GET_PASSAGE.format(version, other_version(version)),
                              force_reply=True)
                 return
+            first_passage_word = passage.split()[0].upper()
+            if len(first_word) == 4 and first_passage_word in VERSIONS and \
+               passage[len(first_passage_word) + 1:].strip():
+                version = first_passage_word
+                passage = passage[len(first_passage_word) + 1:]
 
             send_typing(uid)
             response = get_passage(passage, version)
@@ -672,7 +677,10 @@ class MainPage(webapp2.RequestHandler):
 
         else:
             user.await_reply(None)
-            if user.is_group() and self.BOT_HANDLE not in text:
+            msg_reply = msg.get('reply_to_message')
+            if user.is_group() and self.BOT_HANDLE not in text and \
+               not (msg_reply and str(msg_reply.get('from').get('id')) == BOT_ID):
+                logging.info(LOG_UNRECOGNISED)
                 return
 
             to_lookup = text.lower().replace(self.BOT_HANDLE, '')
