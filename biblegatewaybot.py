@@ -159,6 +159,7 @@ LOG_DID_NOT_SEND = 'Did not send {} to uid {} ({}): {}'
 LOG_ERROR_SENDING = 'Error sending {} to uid {} ({}):\n{}'
 LOG_ERROR_DATASTORE = 'Error reading from datastore:\n'
 LOG_ERROR_INVALID_LINK = 'Invalid link! Link: '
+LOG_ERROR_INVALID_QUICK = 'Invalid quick lookup! Reference: '
 LOG_TYPE_START_NEW = 'Type: Start (new user)'
 LOG_TYPE_START_EXISTING = 'Type: Start (existing user)'
 LOG_TYPE_NON_TEXT = 'Type: Non-text'
@@ -687,10 +688,17 @@ class MainPage(webapp2.RequestHandler):
             refs = extract_refs(to_lookup)
             if refs:
                 ref = refs[0]
-                passage = '{} {}:{}-{}:{}'.format(ref[0], ref[1], ref[2], ref[3], ref[4])
+                if ref[0].startswith('Revelation'):
+                    book = 'Revelation'
+                else:
+                    book = ref[0]
+                passage = '{} {}:{}-{}:{}'.format(book, ref[1], ref[2], ref[3], ref[4])
 
                 send_typing(uid)
                 response = get_passage(passage, user.version)
+
+                if response == EMPTY:
+                    logging.error(LOG_ERROR_INVALID_QUICK + text)
 
                 if response and response != EMPTY:
                     send_message(user, response, msg_type='passage')
