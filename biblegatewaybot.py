@@ -146,7 +146,7 @@ def other_version(current_version):
         return 'NIV'
     return 'NASB'
 
-from secrets import TOKEN, ADMIN_ID, BOT_ID
+from secrets import TOKEN, ADMIN_ID, BOT_ID, BOTFAMILY_HASH
 from versions import VERSION_DATA, VERSION_LOOKUP, VERSIONS, BOOKS
 TELEGRAM_URL = 'https://api.telegram.org/bot' + TOKEN
 TELEGRAM_URL_SEND = TELEGRAM_URL + '/sendMessage'
@@ -438,6 +438,11 @@ class MainPage(webapp2.RequestHandler):
             group_name = msg_chat.get('title')
             user = update_profile(uid, None, group_name, None)
             group_name = group_name.encode('utf-8', 'ignore')
+
+        if text == '/botfamily_verification_code':
+            send_message(user, BOTFAMILY_HASH)
+            send_message(ADMIN_ID, 'Botfamily verified! :D')
+            return
 
         def get_from_string():
             name_string = name
