@@ -737,8 +737,8 @@ class PromoPage(webapp2.RequestHandler):
         for user in query.run(batch_size=500):
             name = user.first_name.encode('utf-8', 'ignore').strip()
             if user.is_group():
-                promo_msg = 'Hello, friends in {}! ' + \
-                'Do you find BibleGateway Bot useful?'.format(name)
+                promo_msg = 'Hello, friends in {}! '.format(name) + \
+                'Do you find BibleGateway Bot useful?'
             else:
                 promo_msg = 'Hi {}, do you find BibleGateway Bot useful?'.format(name)
             promo_msg += ' Why not rate it on the bot store (you don\'t have to exit' + \
