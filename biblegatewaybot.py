@@ -164,13 +164,15 @@ LOG_TYPE_START_NEW = 'Type: Start (new user)'
 LOG_TYPE_START_EXISTING = 'Type: Start (existing user)'
 LOG_TYPE_NON_TEXT = 'Type: Non-text'
 LOG_UNRECOGNISED = 'Type: Unrecognised'
+LOG_USER_MIGRATED = 'User {} migrated to uid {} ({})'
 
+RECOGNISED_ERROR_MIGRATE = '[Error]: Bad Request: group chat is migrated to supergroup chat'
 RECOGNISED_ERRORS = ('[Error]: PEER_ID_INVALID',
                      '[Error]: Bot was kicked from a chat',
                      '[Error]: Bad Request: group is deactivated',
                      '[Error]: Forbidden: bot was kicked from the group chat',
                      '[Error]: Forbidden: can\'t write to chat with deleted user',
-                     '[Error]: Bad Request: group chat is migrated to supergroup chat')
+                     RECOGNISED_ERROR_MIGRATE)
 
 def telegram_post(data, deadline=3):
     return urlfetch.fetch(url=TELEGRAM_URL_SEND, payload=data, method=urlfetch.POST,
@@ -228,6 +230,14 @@ class User(db.Model):
     def await_reply(self, command):
         self.reply_to = command
         self.put()
+
+    def migrate_to(self, uid):
+        props = dict((prop, getattr(self, prop)) for prop in self.properties().keys())
+        props.update(key_name=str(uid))
+        new_user = User(**props)
+        new_user.put()
+        self.delete()
+        return new_user
 
 def get_user(uid):
     key = db.Key.from_path('User', str(uid))
@@ -349,6 +359,12 @@ def handle_response(response, user, uid, msg_type):
 
         logging.info(LOG_DID_NOT_SEND.format(msg_type, uid, user.get_description(),
                                              error_description))
+        if error_description == RECOGNISED_ERROR_MIGRATE:
+            new_uid = response.get('parameters', {}).get('migrate_to_chat_id')
+            if new_uid:
+                user = user.migrate_to(new_uid)
+                logging.info(LOG_USER_MIGRATED.format(uid, new_uid, user.get_description()))
+
         if msg_type == 'promo':
             user.set_promo(False)
 
@@ -480,6 +496,11 @@ class MainPage(webapp2.RequestHandler):
 
         if text == None:
             logging.info(LOG_TYPE_NON_TEXT)
+            migrate_to_chat_id = msg.get('migrate_to_chat_id')
+            if migrate_to_chat_id:
+                new_uid = migrate_to_chat_id
+                user = user.migrate_to(new_uid)
+                logging.info(LOG_USER_MIGRATED.format(uid, new_uid, user.get_description()))
             return
         text = text.strip()
 
