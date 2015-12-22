@@ -637,7 +637,7 @@ class MainPage(webapp2.RequestHandler):
 
             if response == EMPTY:
                 send_message(user, self.NO_RESULTS_FOUND.format(name))
-                logging.error(LOG_ERROR_INVALID_LINK + text)
+                logging.info(LOG_ERROR_INVALID_LINK + text)
                 return
             elif response == None:
                 send_message(user, self.REMOTE_ERROR.format(name))
@@ -712,13 +712,13 @@ class MainPage(webapp2.RequestHandler):
                 return
 
             to_lookup = text.lower().replace(self.BOT_HANDLE, '')
+            to_lookup = to_lookup.replace('revelations', 'revelation')
             refs = extract_refs(to_lookup)
             if refs:
                 ref = refs[0]
-                if ref[0].startswith('Revelation'):
+                book = ref[0]
+                if book == 'Revelation of Jesus Christ':
                     book = 'Revelation'
-                else:
-                    book = ref[0]
                 passage = '{} {}:{}-{}:{}'.format(book, ref[1], ref[2], ref[3], ref[4])
 
                 send_typing(uid)
