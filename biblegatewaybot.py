@@ -119,13 +119,20 @@ def get_search_results(text, start=0):
         header = BeautifulSoup(header, 'lxml').text
         idx = header.find(':')
         idx += header[idx:].find(' ')
-        title = header[:idx].strip()
+        title = strip_markdown(header[:idx].strip())
 
         soup = BeautifulSoup(content, 'lxml')
+
+        bad_strings = soup(text=re.compile('(\*|\_)'))
+        for bad_string in bad_strings:
+            stripped_text = strip_markdown(unicode(bad_string))
+            bad_string.replace_with(stripped_text)
+
         for tag in soup('b'):
             if tag.text == u'...':
                 continue
-            tag.string = '*' + strip_markdown(tag.text) + '*'
+            tag.string = '*' + tag.text + '*'
+
         description = soup.text.strip()
 
         link = '/' + ''.join(title.split()).lower().replace(':', 'V')
