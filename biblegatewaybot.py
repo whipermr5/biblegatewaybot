@@ -3,6 +3,7 @@ import logging
 import json
 import textwrap
 import urllib
+import re
 from bs4 import BeautifulSoup
 from scriptures import extract as extract_refs
 from google.appengine.api import urlfetch, urlfetch_errors, taskqueue
@@ -11,6 +12,9 @@ from datetime import datetime, timedelta
 from xml.etree import ElementTree as etree
 
 EMPTY = 'empty'
+
+def strip_markdown(string):
+    return string.replace('*', '').replace('_', '')
 
 def get_passage(passage, version='NIV'):
     def to_sup(text):
@@ -46,7 +50,7 @@ def get_passage(passage, version='NIV'):
     UNWANTED = '.passage-display, .footnote, .footnotes, .crossrefs, .publisher-info-bottom'
 
     title = soup.select_one('.passage-display-bcv').text
-    header = '*' + title.strip() + '* (' + version + ')'
+    header = '*' + strip_markdown(title.strip()) + '* (' + version + ')'
 
     for tag in soup.select(UNWANTED):
         tag.decompose()
@@ -54,10 +58,20 @@ def get_passage(passage, version='NIV'):
     for tag in soup.select('h1, h2, h3, h4, h5, h6'):
         tag['class'] = WANTED
         text = tag.text.strip().replace(' ', '\\')
-        tag.string = '*' + text + '*'
+        tag.string = '*' + strip_markdown(text) + '*'
+
+    needed_stripping = False
 
     for tag in soup.select('p'):
         tag['class'] = WANTED
+        bad_strings = tag(text=re.compile('(\*|\_)'))
+        for bad_string in bad_strings:
+            stripped_text = strip_markdown(unicode(bad_string))
+            bad_string.replace_with(stripped_text)
+            needed_stripping = True
+
+    if needed_stripping:
+        logging.info('Stripped markdown')
 
     for tag in soup.select('br'):
         tag.name = 'span'
@@ -65,7 +79,7 @@ def get_passage(passage, version='NIV'):
 
     for tag in soup.select('.chapternum'):
         num = tag.text.strip()
-        tag.string = '*' + num + '* '
+        tag.string = '*' + strip_markdown(num) + '* '
 
     for tag in soup.select('.versenum'):
         num = tag.text.strip()
@@ -111,7 +125,7 @@ def get_search_results(text, start=0):
         for tag in soup('b'):
             if tag.text == u'...':
                 continue
-            tag.string = '*' + tag.text + '*'
+            tag.string = '*' + strip_markdown(tag.text) + '*'
         description = soup.text.strip()
 
         link = '/' + ''.join(title.split()).lower().replace(':', 'V')
