@@ -190,6 +190,7 @@ LOG_USER_MIGRATED = 'User {} migrated to uid {} ({})'
 RECOGNISED_ERROR_MIGRATE = '[Error]: Bad Request: group chat is migrated to supergroup chat'
 RECOGNISED_ERRORS = ('[Error]: PEER_ID_INVALID',
                      '[Error]: Bot was kicked from a chat',
+                     '[Error]: Bot was blocked by the user',
                      '[Error]: Bad Request: chat not found',
                      '[Error]: Bad Request: group is deactivated',
                      '[Error]: Forbidden: bot was kicked from the group chat',
