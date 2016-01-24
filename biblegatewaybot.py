@@ -14,7 +14,7 @@ from xml.etree import ElementTree as etree
 EMPTY = 'empty'
 
 def strip_markdown(string):
-    return string.replace('*', '').replace('_', '')
+    return string.replace('*', '').replace('_', '').replace('`', '')
 
 def get_passage(passage, version='NIV'):
     def to_sup(text):
@@ -64,7 +64,7 @@ def get_passage(passage, version='NIV'):
 
     for tag in soup.select('p'):
         tag['class'] = WANTED
-        bad_strings = tag(text=re.compile('(\*|\_)'))
+        bad_strings = tag(text=re.compile('(\*|\_|\`)'))
         for bad_string in bad_strings:
             stripped_text = strip_markdown(unicode(bad_string))
             bad_string.replace_with(stripped_text)
