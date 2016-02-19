@@ -198,6 +198,7 @@ RECOGNISED_ERRORS = ('[Error]: PEER_ID_INVALID',
                      '[Error]: Forbidden: bot was kicked from the supergroup chat',
                      '[Error]: Forbidden: can\'t write to chat with deleted user',
                      '[Error]: Forbidden: bot is not a participant of the channel chat',
+                     '[Error]: Forbidden: bot is not a participant of the supergroup chat',
                      RECOGNISED_ERROR_MIGRATE)
 
 def telegram_post(data, deadline=3):
