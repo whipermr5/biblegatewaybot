@@ -14,7 +14,7 @@ from xml.etree import ElementTree as etree
 EMPTY = 'empty'
 
 def strip_markdown(string):
-    return string.replace('*', '').replace('_', '').replace('`', '')
+    return string.replace('*', '\*').replace('_', '\_').replace('`', '\`').replace('[', '\[')
 
 def get_passage(passage, version='NIV'):
     def to_sup(text):
@@ -57,14 +57,14 @@ def get_passage(passage, version='NIV'):
 
     for tag in soup.select('h1, h2, h3, h4, h5, h6'):
         tag['class'] = WANTED
-        text = tag.text.strip().replace(' ', '\\')
+        text = tag.text.strip().replace(' ', '\a')
         tag.string = '*' + strip_markdown(text) + '*'
 
     needed_stripping = False
 
     for tag in soup.select('p'):
         tag['class'] = WANTED
-        bad_strings = tag(text=re.compile('(\*|\_|\`)'))
+        bad_strings = tag(text=re.compile('(\*|\_|\`|\[)'))
         for bad_string in bad_strings:
             stripped_text = strip_markdown(unicode(bad_string))
             bad_string.replace_with(stripped_text)
@@ -311,7 +311,7 @@ def send_message(user_or_uid, text, msg_type='message', force_reply=False, markd
     def send_short_message(text, countdown=0):
         build = {
             'chat_id': uid,
-            'text': text.replace('\\', ' ')
+            'text': text.replace('\a', ' ')
         }
 
         if force_reply:
