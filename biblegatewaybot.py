@@ -187,7 +187,8 @@ LOG_TYPE_NON_TEXT = 'Type: Non-text'
 LOG_UNRECOGNISED = 'Type: Unrecognised'
 LOG_USER_MIGRATED = 'User {} migrated to uid {} ({})'
 
-RECOGNISED_ERROR_MIGRATE = '[Error : 400 : Bad Request: group chat is migrated to supergroup chat]'
+RECOGNISED_ERROR_MIGRATE = 'Bad Request: group chat is migrated to a supergroup chat'
+#RECOGNISED_ERROR_MIGRATE = '[Error : 400 : Bad Request: group chat is migrated to supergroup chat]'
 #RECOGNISED_ERROR_MIGRATE = '[Error]: Bad Request: group chat is migrated to supergroup chat'
 RECOGNISED_ERRORS = ('[Error]: PEER_ID_INVALID',
                      '[Error]: Bot was kicked from a chat',
@@ -202,6 +203,11 @@ RECOGNISED_ERRORS = ('[Error]: PEER_ID_INVALID',
                      '[Error]: Forbidden: can\'t write to private chat with deleted user',
                      '[Error]: Forbidden: bot is not a participant of the channel chat',
                      '[Error]: Forbidden: bot is not a participant of the supergroup chat',
+                     'Bot was blocked by the user',
+                     'Forbidden: user is deleted',
+                     'Forbidden: bot was kicked from the supergroup chat',
+                     'Bad Request: chat not found',
+                     'Bad Request: group chat is deactivated',
                      '[Error : 400 : PEER_ID_INVALID]',
                      '[Error : 400 : Bad Request: chat not found]',
                      '[Error : 400 : Bad Request: group chat is deactivated]',
