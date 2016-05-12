@@ -186,6 +186,7 @@ LOG_TYPE_START_EXISTING = 'Type: Start (existing user)'
 LOG_TYPE_NON_TEXT = 'Type: Non-text'
 LOG_UNRECOGNISED = 'Type: Unrecognised'
 LOG_USER_MIGRATED = 'User {} migrated to uid {} ({})'
+LOG_USER_DELETED = 'Deleted uid {} ({})'
 
 RECOGNISED_ERROR_PARSE = 'Bad Request: Can\'t parse message text'
 RECOGNISED_ERROR_MIGRATE = 'Bad Request: group chat is migrated to a supergroup chat'
@@ -387,6 +388,11 @@ def handle_response(response, user, uid, msg_type):
             if new_uid:
                 user = user.migrate_to(new_uid)
                 logging.info(LOG_USER_MIGRATED.format(uid, new_uid, user.get_description()))
+        else:
+            user_description = user.get_description()
+            user.delete()
+            logging.info(LOG_USER_DELETED.format(uid, user_description))
+            return True
 
         if msg_type == 'promo':
             user.set_promo(False)
