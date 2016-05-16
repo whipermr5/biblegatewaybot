@@ -16,7 +16,7 @@ EMPTY = 'empty'
 def strip_markdown(string):
     return string.replace('*', '\*').replace('_', '\_').replace('`', '\`').replace('[', '\[')
 
-def get_passage(passage, version='NIV'):
+def get_passage(passage, version='NIV', inline_details=False):
     def to_sup(text):
         sups = {u'0': u'\u2070',
                 u'1': u'\xb9',
@@ -92,7 +92,18 @@ def get_passage(passage, version='NIV'):
     for tag in soup(class_=WANTED):
         final_text += tag.text.strip() + '\n\n'
 
-    return final_text.strip()
+    if not inline_details:
+        return final_text.strip()
+    else:
+        start = html.find('data-osis="') + 11
+        end = html.find('"', start)
+        data_osis = html[start:end]
+        qr_id = data_osis + '/' + version
+        qr_title = title.strip() + ' (' + version + ')'
+        content = final_text.split('\n', 1)[1].replace('*', '').replace('_', '').replace('\a', ' ')
+        content = ' '.join(content.split())
+        qr_description = (content[:150] + '...') if len(content) > 153 else content
+        return (final_text.strip(), qr_id, qr_title, qr_description)
 
 MAX_SEARCH_RESULTS = 10
 
@@ -280,6 +291,11 @@ def get_user(uid):
         user.put()
     return user
 
+def user_exists(uid):
+    key = db.Key.from_path('User', str(uid))
+    user = db.get(key)
+    return user != None
+
 def update_profile(uid, uname, fname, lname):
     existing_user = get_user(uid)
     if existing_user:
@@ -304,7 +320,8 @@ def build_keyboard(buttons):
     return {'keyboard': buttons, 'one_time_keyboard': True}
 
 def send_message(user_or_uid, text, msg_type='message', force_reply=False, markdown=False,
-                 disable_web_page_preview=True, custom_keyboard=None, hide_keyboard=False):
+                 disable_web_page_preview=True, custom_keyboard=None, hide_keyboard=False,
+                 back_to_chat=False):
     try:
         uid = str(user_or_uid.get_uid())
         user = user_or_uid
@@ -324,6 +341,9 @@ def send_message(user_or_uid, text, msg_type='message', force_reply=False, markd
             build['reply_markup'] = custom_keyboard
         elif hide_keyboard:
             build['reply_markup'] = {'hide_keyboard': True}
+        elif back_to_chat:
+            inline_back_button = [[{'text': 'Back to chat', 'switch_inline_query': ''}]]
+            build['reply_markup'] = {'inline_keyboard': inline_back_button}
         if markdown or msg_type in ('passage', 'result'):
             build['parse_mode'] = 'Markdown'
         if disable_web_page_preview:
@@ -470,6 +490,64 @@ class MainPage(webapp2.RequestHandler):
         data = json.loads(self.request.body)
         logging.debug(self.request.body)
 
+        inline_query = data.get('inline_query')
+        chosen_inline_result = data.get('chosen_inline_result')
+
+        if inline_query:
+            uid = inline_query.get('from').get('id')
+            if user_exists:
+                user = get_user(uid)
+            else:
+                user = None
+
+            qid = inline_query.get('id')
+            query = inline_query.get('query').encode('utf-8', 'ignore')
+
+            if not query:
+                results = []
+            else:
+                words = query.split()
+                if len(words) > 1 and words[-1].upper() in VERSIONS:
+                    passage = ' '.join(words[:-1])
+                    version = words[-1].upper()
+                    response = get_passage(passage, version=version, inline_details=True)
+                else:
+                    if user:
+                        response = get_passage(query, version=user.version, inline_details=True)
+                    else:
+                        response = get_passage(query, inline_details=True)
+
+                if not response:
+                    self.abort(502)
+                elif response == EMPTY:
+                    results = []
+                else:
+                    passage = response[0]
+                    qr_id = response[1]
+                    qr_title = response[2]
+                    qr_description = response[3]
+                    content = {'message_text': passage, 'parse_mode': 'Markdown',
+                               'disable_web_page_preview': True}
+                    results = [{'type': 'article', 'id': qr_id, 'title': qr_title,
+                                'description': qr_description, 'input_message_content': content,
+                                'thumb_url': 'http://biblegatewaybot.appspot.com/thumb.jpg'}]
+
+            default_version = user.version if user else 'NIV'
+            payload = {'method': 'answerInlineQuery', 'inline_query_id': qid, 'results': results,
+                       'switch_pm_text': 'Default version: ' + default_version,
+                       'switch_pm_parameter': 'setdefault', 'cache_time': 0}
+
+            output = json.dumps(payload)
+            self.response.headers['Content-Type'] = 'application/json'
+            self.response.write(output)
+            logging.info('Answered inline query')
+            logging.debug(output)
+            return
+        elif chosen_inline_result:
+            logging.info('Inline query result used')
+            logging.debug(str(chosen_inline_result))
+            return
+
         msg = data.get('message')
         msg_chat = msg.get('chat')
         msg_from = msg.get('from')
@@ -523,11 +601,20 @@ class MainPage(webapp2.RequestHandler):
             send_message(user, response, msg_type='welcome')
             user.await_reply(None)
 
+            if text == '/start setdefault':
+                user.await_reply('setdefault')
+                buttons = build_buttons(VERSION_DATA.keys())
+                keyboard = build_keyboard(buttons)
+                send_message(user, self.SET_DEFAULT_CHOOSE_LANGUAGE, custom_keyboard=keyboard)
+
             if new_user:
                 if user.is_group():
                     new_alert = 'New group: "{}" via user: {}'.format(group_name, get_from_string())
                 else:
-                    new_alert = 'New user: ' + get_from_string()
+                    if text == '/start setdefault':
+                        new_alert = 'New user via inline: ' + get_from_string()
+                    else:
+                        new_alert = 'New user: ' + get_from_string()
                 send_message(ADMIN_ID, new_alert)
 
             return
@@ -637,24 +724,29 @@ class MainPage(webapp2.RequestHandler):
 
             send_message(user, response, msg_type='result')
 
-        elif is_command('setdefault') or raw_text == self.BACK_TO_LANGUAGES:
-            user.await_reply(None)
+        elif is_command('setdefault') or raw_text == self.BACK_TO_LANGUAGES or \
+             text == '/start setdefault':
+            if text == '/start setdefault':
+                user.await_reply('setdefault')
             buttons = build_buttons(VERSION_DATA.keys())
             keyboard = build_keyboard(buttons)
             send_message(user, self.SET_DEFAULT_CHOOSE_LANGUAGE, custom_keyboard=keyboard)
 
         elif raw_text in VERSION_DATA:
-            user.await_reply(None)
             buttons = build_buttons(VERSION_DATA[raw_text] + [self.BACK_TO_LANGUAGES])
             keyboard = build_keyboard(buttons)
             send_message(user, self.SET_DEFAULT_CHOOSE_VERSION, custom_keyboard=keyboard)
 
         elif raw_text in VERSION_LOOKUP:
-            user.await_reply(None)
             version = VERSION_LOOKUP[raw_text]
             user.update_version(version)
-            send_message(user, self.SET_DEFAULT_SUCCESS.format(version), markdown=True,
-                         hide_keyboard=True)
+            if user.reply_to == 'setdefault':
+                send_message(user, self.SET_DEFAULT_SUCCESS.format(version), markdown=True,
+                             back_to_chat=True)
+            else:
+                send_message(user, self.SET_DEFAULT_SUCCESS.format(version), markdown=True,
+                             hide_keyboard=True)
+            user.await_reply(None)
 
         elif is_command('help'):
             user.await_reply(None)

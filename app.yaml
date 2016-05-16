@@ -13,6 +13,10 @@ handlers:
   static_files: favicon.ico
   upload: favicon.ico
 
+- url: /thumb.jpg
+  static_files: thumb.jpg
+  upload: thumb.jpg
+
 - url: .*
   script: biblegatewaybot.app
 
