@@ -193,6 +193,7 @@ RECOGNISED_ERROR_MIGRATE = 'Bad Request: group chat is migrated to a supergroup 
 RECOGNISED_ERRORS = ('PEER_ID_INVALID',
                      'Bot was blocked by the user',
                      'Forbidden: user is deleted',
+                     'Forbidden: bot was kicked from the channel chat',
                      'Forbidden: bot was kicked from the supergroup chat',
                      'Bad Request: chat not found',
                      'Bad Request: group chat is deactivated',
