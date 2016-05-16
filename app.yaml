@@ -5,7 +5,7 @@ api_version: 1
 threadsafe: yes
 
 handlers:
-- url: /(message|promo|migrate)
+- url: /(message|promo|migrate|verify)
   script: biblegatewaybot.app
   login: admin
 

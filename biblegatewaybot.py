@@ -181,12 +181,15 @@ LOG_ERROR_SENDING = 'Error sending {} to uid {} ({}):\n{}'
 LOG_ERROR_DATASTORE = 'Error reading from datastore:\n'
 LOG_ERROR_INVALID_LINK = 'Invalid link! Link: '
 LOG_ERROR_INVALID_QUICK = 'Invalid quick lookup! Reference: '
+LOG_ERROR_QUERY = 'Error querying uid {} ({}): {}'
 LOG_TYPE_START_NEW = 'Type: Start (new user)'
 LOG_TYPE_START_EXISTING = 'Type: Start (existing user)'
 LOG_TYPE_NON_TEXT = 'Type: Non-text'
 LOG_UNRECOGNISED = 'Type: Unrecognised'
 LOG_USER_MIGRATED = 'User {} migrated to uid {} ({})'
 LOG_USER_DELETED = 'Deleted uid {} ({})'
+LOG_USER_REACHABLE = 'Uid {} ({}) is still reachable'
+LOG_USER_UNREACHABLE = 'Unable to reach uid {} ({}): {}'
 
 RECOGNISED_ERROR_PARSE = 'Bad Request: Can\'t parse message text'
 RECOGNISED_ERROR_MIGRATE = 'Bad Request: group chat is migrated to a supergroup chat'
@@ -201,6 +204,11 @@ RECOGNISED_ERRORS = ('PEER_ID_INVALID',
 
 def telegram_post(data, deadline=3):
     return urlfetch.fetch(url=TELEGRAM_URL_SEND, payload=data, method=urlfetch.POST,
+                          headers=JSON_HEADER, deadline=deadline)
+
+def telegram_query(uid, deadline=3):
+    data = json.dumps({'chat_id': uid, 'action': 'typing'})
+    return urlfetch.fetch(url=TELEGRAM_URL_CHAT_ACTION, payload=data, method=urlfetch.POST,
                           headers=JSON_HEADER, deadline=deadline)
 
 class User(db.Model):
@@ -810,10 +818,51 @@ class PromoPage(webapp2.RequestHandler):
                          ' Telegram)!\nhttps://telegram.me/storebot?start=biblegatewaybot'
             send_message(user, promo_msg, msg_type='promo')
 
+class VerifyPage(webapp2.RequestHandler):
+    def get(self):
+        try:
+            query = User.all()
+            for user in query.run(batch_size=3000):
+                uid = str(user.get_uid())
+                taskqueue.add(url='/verify', payload=uid)
+            self.response.headers['Content-Type'] = 'text/plain'
+            self.response.write('Cleanup in progress\n')
+        except Exception as e:
+            logging.error(e)
+
+    def post(self):
+        uid = self.request.body
+        user = get_user(uid)
+
+        try:
+            result = telegram_query(uid, 4)
+        except Exception as e:
+            logging.warning(LOG_ERROR_QUERY.format(uid, user.get_description(), str(e)))
+            self.abort(502)
+
+        response = json.loads(result.content)
+        if response.get('ok') == True:
+            logging.info(LOG_USER_REACHABLE.format(uid, user.get_description()))
+        else:
+            error_description = str(response.get('description'))
+            if error_description == RECOGNISED_ERROR_MIGRATE:
+                new_uid = response.get('parameters', {}).get('migrate_to_chat_id')
+                if new_uid:
+                    user = user.migrate_to(new_uid)
+                    logging.info(LOG_USER_MIGRATED.format(uid, new_uid, user.get_description()))
+            elif error_description in RECOGNISED_ERRORS:
+                user_description = user.get_description()
+                user.delete()
+                logging.info(LOG_USER_DELETED.format(uid, user_description))
+            else:
+                logging.warning(LOG_USER_UNREACHABLE.format(uid, user.get_description(), error_description))
+                self.abort(502)
+
 app = webapp2.WSGIApplication([
     ('/', MainPage),
     ('/' + TOKEN, MainPage),
     ('/message', MessagePage),
     ('/promo', PromoPage),
     ('/migrate', MigratePage),
+    ('/verify', VerifyPage),
 ], debug=True)
