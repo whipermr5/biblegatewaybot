@@ -36,15 +36,17 @@ def get_passage(passage, version='NIV', inline_details=False):
     search = urllib.quote(passage.lower().strip())
     url = BG_URL.format(search, version)
     try:
+        logging.debug('Began fetching from remote')
         result = urlfetch.fetch(url, deadline=10)
+        logging.debug('Finished fetching from remote')
     except urlfetch_errors.Error as e:
         logging.warning('Error fetching passage:\n' + str(e))
         return None
     html = result.content
-    soup = BeautifulSoup(html, 'lxml').select_one('.passage-text')
-
-    if not soup:
+    if not 'class="passage-text"' in html:
         return EMPTY
+
+    soup = BeautifulSoup(html, 'lxml').select_one('.passage-text')
 
     WANTED = 'bg-bot-passage-text'
     UNWANTED = '.passage-display, .footnote, .footnotes, .crossrefs, .publisher-info-bottom'
@@ -925,13 +927,10 @@ class MassPage(webapp2.RequestHandler):
         # try:
         #     query = User.all()
         #     for user in query.run(batch_size=3000):
-        #         inline_keyboard = build_inline_switch_keyboard('Try inline mode', 'john 3:16 nlt')
-        #         mass_msg = '*Update*\n\nNew feature: inline mode! You can now use BibleGateway Bot to insert bible passages into _any_ chat without having to first add the bot into the group.\n\nSimply start typing @biblegatewaybot followed by the scripture reference (and optionally, the translation you want) and wait for the result to appear. Tap the button below to try it out now!\n\n- BibleGateway Bot admin'
-        #         send_message(user, mass_msg, msg_type='mass', markdown=True, custom_keyboard=inline_keyboard)
-
+        #         mass_msg = '*Update*\n\nUPDATE_TEXT\n\n- BibleGateway Bot admin'
+        #         send_message(user, mass_msg, msg_type='mass', markdown=True)
         # except Exception as e:
         #     logging.error(e)
-
         pass
 
 class VerifyPage(webapp2.RequestHandler):
