@@ -57,7 +57,9 @@ def get_passage(passage, version='NIV', inline_details=False):
 
     for tag in soup.select('h1, h2, h3, h4, h5, h6'):
         tag['class'] = WANTED
-        text = tag.text.strip().replace(' ', '\a')
+        text = tag.text.strip()
+        if not inline_details:
+            text = text.replace(' ', '\a')
         tag.string = '*' + strip_markdown(text) + '*'
 
     needed_stripping = False
@@ -100,7 +102,7 @@ def get_passage(passage, version='NIV', inline_details=False):
         data_osis = html[start:end]
         qr_id = data_osis + '/' + version
         qr_title = title.strip() + ' (' + version + ')'
-        content = final_text.split('\n', 1)[1].replace('*', '').replace('_', '').replace('\a', ' ')
+        content = final_text.split('\n', 1)[1].replace('*', '').replace('_', '')
         content = ' '.join(content.split())
         qr_description = (content[:150] + '...') if len(content) > 153 else content
         return (final_text.strip(), qr_id, qr_title, qr_description)
