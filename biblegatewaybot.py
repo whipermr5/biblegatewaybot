@@ -486,6 +486,8 @@ class MainPage(webapp2.RequestHandler):
 
     BACK_TO_LANGUAGES = u'\U0001F519' + ' to language list'
 
+    TRY_KEYBOARD = build_inline_switch_keyboard('Try inline mode', 'john 3:16 nlt')
+
     def get(self):
         self.response.headers['Content-Type'] = 'text/plain'
         self.response.write(self.BOT_USERNAME + ' backend running...\n')
@@ -602,7 +604,7 @@ class MainPage(webapp2.RequestHandler):
             else:
                 response = self.WELCOME_USER.format(name)
             response += self.WELCOME_GET_STARTED
-            send_message(user, response, msg_type='welcome')
+            send_message(user, response, msg_type='welcome', custom_keyboard=self.TRY_KEYBOARD)
             user.await_reply(None)
 
             if text == '/start setdefault':
@@ -755,8 +757,7 @@ class MainPage(webapp2.RequestHandler):
 
         elif is_command('help'):
             user.await_reply(None)
-            inline_keyboard = build_inline_switch_keyboard('Try inline mode', 'john 3:16 nlt')
-            send_message(user, self.HELP.format(name), custom_keyboard=inline_keyboard)
+            send_message(user, self.HELP.format(name), custom_keyboard=self.TRY_KEYBOARD)
 
         elif is_command('settings'):
             user.await_reply(None)
@@ -868,8 +869,7 @@ class MainPage(webapp2.RequestHandler):
                     return
 
             logging.info(LOG_UNRECOGNISED)
-            inline_keyboard = build_inline_switch_keyboard('Try inline mode', 'john 3:16 nlt')
-            send_message(user, self.UNRECOGNISED.format(name), custom_keyboard=inline_keyboard)
+            send_message(user, self.UNRECOGNISED.format(name), custom_keyboard=self.TRY_KEYBOARD)
 
 class MessagePage(webapp2.RequestHandler):
     def post(self):
@@ -917,6 +917,23 @@ class PromoPage(webapp2.RequestHandler):
                          ' Telegram)!\nhttps://telegram.me/storebot?start=biblegatewaybot'
             send_message(user, promo_msg, msg_type='promo')
 
+class MassPage(webapp2.RequestHandler):
+    def get(self):
+        taskqueue.add(url='/mass')
+
+    def post(self):
+        # try:
+        #     query = User.all()
+        #     for user in query.run(batch_size=3000):
+        #         inline_keyboard = build_inline_switch_keyboard('Try inline mode', 'john 3:16 nlt')
+        #         mass_msg = '*Update*\n\nNew feature: inline mode! You can now use BibleGateway Bot to insert bible passages into _any_ chat without having to first add the bot into the group.\n\nSimply start typing @biblegatewaybot followed by the scripture reference (and optionally, the translation you want) and wait for the result to appear. Tap the button below to try it out now!\n\n- BibleGateway Bot admin'
+        #         send_message(user, mass_msg, msg_type='mass', markdown=True, custom_keyboard=inline_keyboard)
+
+        # except Exception as e:
+        #     logging.error(e)
+
+        pass
+
 class VerifyPage(webapp2.RequestHandler):
     def get(self):
         try:
@@ -963,5 +980,6 @@ app = webapp2.WSGIApplication([
     ('/message', MessagePage),
     ('/promo', PromoPage),
     ('/migrate', MigratePage),
+    ('/mass', MassPage),
     ('/verify', VerifyPage),
 ], debug=True)
