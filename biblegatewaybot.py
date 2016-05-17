@@ -321,9 +321,12 @@ def build_buttons(menu):
 def build_keyboard(buttons):
     return {'keyboard': buttons, 'one_time_keyboard': True}
 
+def build_inline_switch_keyboard(text, query=''):
+    inline_switch_button = {'text': text, 'switch_inline_query': query}
+    return {'inline_keyboard': [[inline_switch_button]]}
+
 def send_message(user_or_uid, text, msg_type='message', force_reply=False, markdown=False,
-                 disable_web_page_preview=True, custom_keyboard=None, hide_keyboard=False,
-                 back_to_chat=False):
+                 disable_web_page_preview=True, custom_keyboard=None, hide_keyboard=False):
     try:
         uid = str(user_or_uid.get_uid())
         user = user_or_uid
@@ -343,9 +346,6 @@ def send_message(user_or_uid, text, msg_type='message', force_reply=False, markd
             build['reply_markup'] = custom_keyboard
         elif hide_keyboard:
             build['reply_markup'] = {'hide_keyboard': True}
-        elif back_to_chat:
-            inline_back_button = [[{'text': 'Back to chat', 'switch_inline_query': ''}]]
-            build['reply_markup'] = {'inline_keyboard': inline_back_button}
         if markdown or msg_type in ('passage', 'result'):
             build['parse_mode'] = 'Markdown'
         if disable_web_page_preview:
@@ -447,7 +447,9 @@ class MainPage(webapp2.RequestHandler):
     CMD_LIST = '/get <reference>\n/get<version> <reference>\n' + \
                '/search <keyword>\n/setdefault <version>\n\n' + \
                'Examples:\n/get John 3:16\n/getNLT 1 cor 13:4-7\n' + \
-               '/search the greatest commandment\n/setdefault NASB'
+               '/search the greatest commandment\n/setdefault NASB\n\n' + \
+               'Inline mode:\n' + BOT_HANDLE + ' john 3:16\n' + \
+               BOT_HANDLE + ' 1co13 nasb'
 
     WELCOME_GROUP = 'Hello, friends in {}! Thanks for adding me in!'
     WELCOME_USER = 'Hello, {}! Welcome!'
@@ -743,8 +745,9 @@ class MainPage(webapp2.RequestHandler):
             version = VERSION_LOOKUP[raw_text]
             user.update_version(version)
             if user.reply_to == 'setdefault':
+                inline_keyboard = build_inline_switch_keyboard('Back to chat')
                 send_message(user, self.SET_DEFAULT_SUCCESS.format(version), markdown=True,
-                             back_to_chat=True)
+                             custom_keyboard=inline_keyboard)
             else:
                 send_message(user, self.SET_DEFAULT_SUCCESS.format(version), markdown=True,
                              hide_keyboard=True)
@@ -752,7 +755,8 @@ class MainPage(webapp2.RequestHandler):
 
         elif is_command('help'):
             user.await_reply(None)
-            send_message(user, self.HELP.format(name))
+            inline_keyboard = build_inline_switch_keyboard('Try inline mode', 'john 3:16 nlt')
+            send_message(user, self.HELP.format(name), custom_keyboard=inline_keyboard)
 
         elif is_command('settings'):
             user.await_reply(None)
@@ -864,7 +868,8 @@ class MainPage(webapp2.RequestHandler):
                     return
 
             logging.info(LOG_UNRECOGNISED)
-            send_message(user, self.UNRECOGNISED.format(name))
+            inline_keyboard = build_inline_switch_keyboard('Try inline mode', 'john 3:16 nlt')
+            send_message(user, self.UNRECOGNISED.format(name), custom_keyboard=inline_keyboard)
 
 class MessagePage(webapp2.RequestHandler):
     def post(self):
