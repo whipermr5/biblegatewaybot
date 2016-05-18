@@ -42,11 +42,15 @@ def get_passage(passage, version='NIV', inline_details=False):
     except urlfetch_errors.Error as e:
         logging.warning('Error fetching passage:\n' + str(e))
         return None
-    html = result.content
-    if not 'class="passage-text"' in html:
-        return EMPTY
 
-    soup = BeautifulSoup(html, 'lxml').select_one('.passage-text')
+    html = result.content
+    start = html.find('<div class="passage-text">')
+    if start == -1:
+        return EMPTY
+    end = html.find('<!--END .passage-text-->', start)
+    passage_html = html[start:end]
+
+    soup = BeautifulSoup(passage_html, 'lxml').select_one('.passage-text')
 
     WANTED = 'bg-bot-passage-text'
     UNWANTED = '.passage-display, .footnote, .footnotes, .crossrefs, .publisher-info-bottom'
@@ -95,6 +99,8 @@ def get_passage(passage, version='NIV', inline_details=False):
     final_text = header + '\n\n'
     for tag in soup(class_=WANTED):
         final_text += tag.text.strip() + '\n\n'
+
+    logging.debug('Finished BeautifulSoup processing')
 
     if not inline_details:
         return final_text.strip()
