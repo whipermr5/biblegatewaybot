@@ -544,7 +544,7 @@ class MainPage(webapp2.RequestHandler):
                                'disable_web_page_preview': True}
                     results = [{'type': 'article', 'id': qr_id, 'title': qr_title,
                                 'description': qr_description, 'input_message_content': content,
-                                'thumb_url': 'http://biblegatewaybot.appspot.com/thumb.jpg'}]
+                                'thumb_url': 'https://biblegatewaybot.appspot.com/thumb.jpg'}]
 
             default_version = user.version if user else 'NIV'
             payload = {'method': 'answerInlineQuery', 'inline_query_id': qid, 'results': results,
