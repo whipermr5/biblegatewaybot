@@ -206,6 +206,7 @@ LOG_ERROR_QUERY = 'Error querying uid {} ({}): {}'
 LOG_TYPE_START_NEW = 'Type: Start (new user)'
 LOG_TYPE_START_EXISTING = 'Type: Start (existing user)'
 LOG_TYPE_NON_TEXT = 'Type: Non-text'
+LOG_TYPE_NON_MESSAGE = 'Type: Non-message'
 LOG_UNRECOGNISED = 'Type: Unrecognised'
 LOG_USER_MIGRATED = 'User {} migrated to uid {} ({})'
 LOG_USER_DELETED = 'Deleted uid {} ({})'
@@ -563,6 +564,10 @@ class MainPage(webapp2.RequestHandler):
             return
 
         msg = data.get('message')
+        if not msg:
+            logging.info(LOG_TYPE_NON_MESSAGE)
+            return
+
         msg_chat = msg.get('chat')
         msg_from = msg.get('from')
 
