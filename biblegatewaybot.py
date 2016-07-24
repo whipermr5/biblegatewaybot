@@ -274,6 +274,7 @@ RECOGNISED_ERRORS = ('PEER_ID_INVALID',
                      'Forbidden: bot was kicked from the group chat',
                      'Forbidden: bot was kicked from the channel chat',
                      'Forbidden: bot was kicked from the supergroup chat',
+                     'Forbidden: bot is not a member of the supergroup chat',
                      'Bad Request: chat not found',
                      'Bad Request: group chat is deactivated',
                      RECOGNISED_ERROR_MIGRATE)
