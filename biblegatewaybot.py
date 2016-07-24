@@ -115,7 +115,7 @@ def get_passage(passage, version='NIV', inline_details=False):
         qr_description = (content[:150] + '...') if len(content) > 153 else content
         return (final_text.strip(), qr_id, qr_title, qr_description)
 
-MAX_SEARCH_RESULTS = 10
+MAX_SEARCH_RESULTS = 5
 
 def get_search_results_old(text, start=0):
     BH_URL = 'http://216.58.158.10/search?q={}&output=xml_no_dtd&client=default_frontend&num=' + \
@@ -202,11 +202,12 @@ def get_search_results(text, start=0):
 
     num_results = len(headers)
 
-    if num_results == 0:
+    if num_results == 0 or start >= num_results:
         return EMPTY
 
     results_body = ''
-    for i in range(num_results):
+    end = min(num_results, start + MAX_SEARCH_RESULTS)
+    for i in range(start, end):
         header = headers[i].text
 
         idx = header.find(':')
@@ -233,7 +234,16 @@ def get_search_results(text, start=0):
 
         results_body += u'\U0001F539' + title + '\n' + description + '\n' + link + '\n\n'
 
-    final_text = 'Search results\n\n' + results_body.strip()
+    final_text = 'Search results'
+
+    if num_results > MAX_SEARCH_RESULTS:
+        final_text += ' ({}-{} of {})'.format(start + 1, end, num_results)
+
+    final_text += '\n\n' + results_body.strip()
+
+    if start + MAX_SEARCH_RESULTS < num_results:
+        final_text += '\n\nGet /more results'
+
     return final_text
 
 def other_version(current_version):
