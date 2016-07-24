@@ -117,7 +117,7 @@ def get_passage(passage, version='NIV', inline_details=False):
 
 MAX_SEARCH_RESULTS = 10
 
-def get_search_results(text, start=0):
+def get_search_results_old(text, start=0):
     BH_URL = 'http://216.58.158.10/search?q={}&output=xml_no_dtd&client=default_frontend&num=' + \
              str(MAX_SEARCH_RESULTS) + '&oe=UTF-8&ie=UTF-8&site=biblecc&filter=0&start={}'
 
@@ -181,6 +181,59 @@ def get_search_results(text, start=0):
     if int(en) < int(total):
         final_text += '\n\nGet /more results'
 
+    return final_text
+
+def get_search_results(text, start=0):
+    BH_URL = 'http://biblehub.net/search.php?q={}'
+
+    query = urllib.quote(text.lower().strip())
+    url = BH_URL.format(query)
+    try:
+        result = urlfetch.fetch(url, deadline=10)
+    except urlfetch_errors.Error as e:
+        logging.warning('Error fetching search results:\n' + str(e))
+        return None
+
+    html = result.content
+    soup = BeautifulSoup(html, 'lxml')
+
+    headers = soup.select('.l')
+    bodies = soup.select('.s')
+
+    num_results = len(headers)
+
+    if num_results == 0:
+        return EMPTY
+
+    results_body = ''
+    for i in range(num_results):
+        header = headers[i].text
+
+        idx = header.find(':')
+        idx += header[idx:].find(' ')
+        title = strip_markdown(header[:idx].strip())
+
+        body = bodies[i]
+
+        bad_strings = body(text=re.compile('(\*|\_)'))
+        for bad_string in bad_strings:
+            stripped_text = strip_markdown(unicode(bad_string))
+            bad_string.replace_with(stripped_text)
+
+        for tag in body('b'):
+            if tag.text == u'...':
+                continue
+            tag.string = '*' + tag.text + '*'
+
+        body_text = body.text
+        idx = body_text.rfind('//biblehub.com')
+        description = ' '.join(body_text[:idx].split())
+
+        link = '/' + ''.join(title.split()).lower().replace(':', 'V')
+
+        results_body += u'\U0001F539' + title + '\n' + description + '\n' + link + '\n\n'
+
+    final_text = 'Search results\n\n' + results_body.strip()
     return final_text
 
 def other_version(current_version):
