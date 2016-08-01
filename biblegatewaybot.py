@@ -281,12 +281,13 @@ RECOGNISED_ERROR_MIGRATE = 'Bad Request: group chat is migrated to a supergroup 
 RECOGNISED_ERRORS = ('PEER_ID_INVALID',
                      'Bot was blocked by the user',
                      'Forbidden: user is deleted',
+                     'Forbidden: user is deactivated',
                      'Forbidden: bot was kicked from the group chat',
                      'Forbidden: bot was kicked from the channel chat',
                      'Forbidden: bot was kicked from the supergroup chat',
                      'Forbidden: bot is not a member of the supergroup chat',
                      'Bad Request: chat not found',
-                     'Bad Request: group chat is deactivated',
+                     'Bad Request: group chat was deactivated',
                      RECOGNISED_ERROR_MIGRATE)
 
 def telegram_post(data, deadline=3):
