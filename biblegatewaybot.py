@@ -868,7 +868,7 @@ class MainPage(webapp2.RequestHandler):
             send_message(user, response, msg_type='passage')
 
         elif text in ('/more', '/more' + self.BOT_HANDLE) and user.reply_to != None and \
-             user.reply_to.startswith('search'):
+             user.reply_to.startswith('search') and len(user.reply_to) > 6:
             idx = user.reply_to.find(' ')
             old_start = int(user.reply_to[6:idx])
             search_term = user.reply_to[idx + 1:]
