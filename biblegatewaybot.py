@@ -1053,7 +1053,8 @@ class VerifyPage(webapp2.RequestHandler):
                 user.delete()
                 logging.info(LOG_USER_DELETED.format(uid, user_description))
             else:
-                logging.warning(LOG_USER_UNREACHABLE.format(uid, user.get_description(), error_description))
+                logging.warning(LOG_USER_UNREACHABLE.format(uid, user.get_description(),
+                                                            error_description))
                 self.abort(502)
 
 app = webapp2.WSGIApplication([
