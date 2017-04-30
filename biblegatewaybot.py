@@ -426,7 +426,7 @@ def send_message(user_or_uid, text, msg_type='message', force_reply=False, markd
         elif custom_keyboard:
             build['reply_markup'] = custom_keyboard
         elif hide_keyboard:
-            build['reply_markup'] = {'hide_keyboard': True}
+            build['reply_markup'] = {'remove_keyboard': True}
         if markdown or msg_type in ('passage', 'result'):
             build['parse_mode'] = 'Markdown'
         if disable_web_page_preview:
@@ -899,13 +899,13 @@ class MainPage(webapp2.RequestHandler):
 
             if response == EMPTY:
                 user.await_reply(None)
-                send_message(user, self.NO_RESULTS_FOUND.format(name))
+                send_message(user, self.NO_RESULTS_FOUND.format(name), hide_keyboard=True)
                 return
             elif response == None:
-                send_message(user, self.REMOTE_ERROR.format(name))
+                send_message(user, self.REMOTE_ERROR.format(name), hide_keyboard=True)
                 return
 
-            send_message(user, response, msg_type='result')
+            send_message(user, response, msg_type='result', hide_keyboard=True)
 
         elif user.reply_to != None and user.reply_to.startswith('get'):
             version = user.reply_to[3:].upper()
@@ -917,13 +917,13 @@ class MainPage(webapp2.RequestHandler):
             response = get_passage(text, version)
 
             if response == EMPTY:
-                send_message(user, self.NO_RESULTS_FOUND.format(name))
+                send_message(user, self.NO_RESULTS_FOUND.format(name), hide_keyboard=True)
                 return
             elif response == None:
-                send_message(user, self.REMOTE_ERROR.format(name))
+                send_message(user, self.REMOTE_ERROR.format(name), hide_keyboard=True)
                 return
 
-            send_message(user, response, msg_type='passage')
+            send_message(user, response, msg_type='passage', hide_keyboard=True)
 
         else:
             user.await_reply(None)
@@ -950,7 +950,7 @@ class MainPage(webapp2.RequestHandler):
                     logging.error(LOG_ERROR_INVALID_QUICK + text)
 
                 if response and response != EMPTY:
-                    send_message(user, response, msg_type='passage')
+                    send_message(user, response, msg_type='passage', hide_keyboard=True)
                     return
 
             logging.info(LOG_UNRECOGNISED)
