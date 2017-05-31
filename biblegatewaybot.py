@@ -296,11 +296,11 @@ RECOGNISED_ERRORS = ('PEER_ID_INVALID',
                      'Bad Request: group chat was deactivated',
                      RECOGNISED_ERROR_MIGRATE)
 
-def telegram_post(data, deadline=3):
+def telegram_post(data, deadline=10):
     return urlfetch.fetch(url=TELEGRAM_URL_SEND, payload=data, method=urlfetch.POST,
                           headers=JSON_HEADER, deadline=deadline)
 
-def telegram_query(uid, deadline=3):
+def telegram_query(uid, deadline=10):
     data = json.dumps({'chat_id': uid, 'action': 'typing'})
     return urlfetch.fetch(url=TELEGRAM_URL_CHAT_ACTION, payload=data, method=urlfetch.POST,
                           headers=JSON_HEADER, deadline=deadline)
@@ -965,7 +965,7 @@ class MessagePage(webapp2.RequestHandler):
         user = get_user(uid)
 
         try:
-            result = telegram_post(data, 4)
+            result = telegram_post(data, deadline=30)
         except urlfetch_errors.Error as e:
             logging.warning(LOG_ERROR_SENDING.format(msg_type, uid, user.get_description(), str(e)))
             logging.debug(data)
@@ -1033,7 +1033,7 @@ class VerifyPage(webapp2.RequestHandler):
         user = get_user(uid)
 
         try:
-            result = telegram_query(uid, 4)
+            result = telegram_query(uid, deadline=30)
         except Exception as e:
             logging.warning(LOG_ERROR_QUERY.format(uid, user.get_description(), str(e)))
             self.abort(502)
