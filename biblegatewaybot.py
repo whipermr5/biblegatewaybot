@@ -355,6 +355,8 @@ class User(db.Model):
         self.put()
 
     def await_reply(self, command):
+        if command and len(command) > 1500:
+            command = command[:1500]
         self.reply_to = command
         self.put()
 
