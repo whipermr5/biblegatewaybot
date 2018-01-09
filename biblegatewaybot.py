@@ -276,7 +276,7 @@ LOG_USER_DELETED = 'Deleted uid {} ({})'
 LOG_USER_REACHABLE = 'Uid {} ({}) is still reachable'
 LOG_USER_UNREACHABLE = 'Unable to reach uid {} ({}): {}'
 
-RECOGNISED_ERROR_PARSE = 'Bad Request: Can\'t parse message text'
+RECOGNISED_ERROR_PARSE = 'Bad Request: can\'t parse'
 RECOGNISED_ERROR_MIGRATE = 'Bad Request: group chat is migrated to a supergroup chat'
 RECOGNISED_ERRORS = ('PEER_ID_INVALID',
                      'Bot was blocked by the user',
@@ -488,6 +488,11 @@ def handle_response(response, user, uid, msg_type):
 
     else:
         error_description = str(response.get('description'))
+        if error_description.startswith(RECOGNISED_ERROR_PARSE):
+            logging.warning(LOG_ERROR_SENDING.format(msg_type, uid, user.get_description(),
+                                                     error_description))
+            return True
+
         if error_description not in RECOGNISED_ERRORS:
             logging.warning(LOG_ERROR_SENDING.format(msg_type, uid, user.get_description(),
                                                      error_description))
