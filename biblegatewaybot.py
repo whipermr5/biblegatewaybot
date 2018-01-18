@@ -186,7 +186,7 @@ def get_search_results_old(text, start=0):
 def get_search_results(text, start=0):
     BH_URL = 'http://biblehub.net/search.php?q={}'
 
-    query = urllib.quote(text.lower().strip())
+    query = urllib.quote(text.encode('utf-8', 'ignore').lower().strip())
     url = BH_URL.format(query)
     try:
         result = urlfetch.fetch(url, deadline=10)
@@ -806,7 +806,7 @@ class MainPage(webapp2.RequestHandler):
             send_message(user, self.SET_DEFAULT_SUCCESS.format(version), markdown=True)
 
         elif is_full_search_command():
-            search_term = text[8:].strip().lower()
+            search_term = raw_text[8:].strip().lower()
             user.await_reply('search0 ' + raw_text[8:].strip().lower())
 
             send_typing(uid)
