@@ -1,5 +1,1 @@
 cron:
-- description: daily promo delivery
-  url: /promo
-  schedule: every day 12:00
-  timezone: Asia/Singapore
