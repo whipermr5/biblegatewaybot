@@ -293,6 +293,7 @@ RECOGNISED_ERRORS = ('PEER_ID_INVALID',
                      'Forbidden: Bot can\'t initiate conversation with a user',
                      'Bad Request: chat not found',
                      'Bad Request: PEER_ID_INVALID',
+                     'Bad Request: have no rights to send a message',
                      'Bad Request: group chat was deactivated',
                      RECOGNISED_ERROR_MIGRATE)
 
