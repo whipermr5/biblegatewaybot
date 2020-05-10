@@ -277,7 +277,7 @@ LOG_USER_REACHABLE = 'Uid {} ({}) is still reachable'
 LOG_USER_UNREACHABLE = 'Unable to reach uid {} ({}): {}'
 
 RECOGNISED_ERROR_PARSE = 'Bad Request: can\'t parse'
-RECOGNISED_ERROR_MIGRATE = 'Bad Request: group chat is migrated to a supergroup chat'
+RECOGNISED_ERROR_MIGRATE = 'Bad Request: group chat was upgraded to a supergroup chat'
 RECOGNISED_ERRORS = ('PEER_ID_INVALID',
                      'Bot was blocked by the user',
                      'Forbidden: user is deleted',
