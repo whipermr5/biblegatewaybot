@@ -31,7 +31,7 @@ def get_passage(passage, version='NIV', inline_details=False):
                 u'-': u'\u207b'}
         return ''.join(sups.get(char, char) for char in text)
 
-    BG_URL = 'https://www.biblegateway.com/passage/?search={}&version={}&interface=print'
+    BG_URL = 'https://classic.biblegateway.com/passage/?search={}&version={}&interface=print'
 
     search = urllib.quote(passage.lower().strip())
     url = BG_URL.format(search, version)
