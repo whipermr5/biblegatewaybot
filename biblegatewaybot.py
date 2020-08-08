@@ -270,6 +270,7 @@ LOG_TYPE_START_NEW = 'Type: Start (new user)'
 LOG_TYPE_START_EXISTING = 'Type: Start (existing user)'
 LOG_TYPE_NON_TEXT = 'Type: Non-text'
 LOG_TYPE_NON_MESSAGE = 'Type: Non-message'
+LOG_TYPE_NEW_PARTICIPANT = 'Type: New participant'
 LOG_UNRECOGNISED = 'Type: Unrecognised'
 LOG_USER_MIGRATED = 'User {} migrated to uid {} ({})'
 LOG_USER_DELETED = 'Deleted uid {} ({})'
@@ -685,6 +686,12 @@ class MainPage(webapp2.RequestHandler):
             return name_string
 
         if user.last_sent == None or text == '/start':
+            if user.is_group() and msg.get('new_chat_members'):
+                new_chat_member_ids = [str(m.get('id')) for m in msg.get('new_chat_members')]
+                if BOT_ID not in new_chat_member_ids:
+                    logging.info(LOG_TYPE_NEW_PARTICIPANT)
+                    return
+
             if user.last_sent == None:
                 logging.info(LOG_TYPE_START_NEW)
                 new_user = True
