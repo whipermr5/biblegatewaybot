@@ -44,24 +44,26 @@ def get_passage(passage, version='NIV', inline_details=False):
         return None
 
     html = result.content
-    start = html.find('<div class="passage-text">')
+    start = html.find('<div class="passage-col')
     if start == -1:
         return EMPTY
-    end = html.find('<!--END .passage-text-->', start)
+    end = html.find('<!-- passage-box -->', start)
     passage_html = html[start:end]
 
-    soup = BeautifulSoup(passage_html, 'lxml').select_one('.passage-text')
+    soup = BeautifulSoup(passage_html, 'lxml')
 
-    WANTED = 'bg-bot-passage-text'
-    UNWANTED = '.passage-display, .footnote, .footnotes, .crossrefs, .publisher-info-bottom'
-
-    title = soup.select_one('.passage-display-bcv').text
+    title = soup.select_one('.bcv').text
     header = '*' + strip_markdown(title.strip()) + '* (' + version + ')'
 
-    for tag in soup.select(UNWANTED):
+    passage_soup = soup.select_one('.passage-text')
+
+    WANTED = 'bg-bot-passage-text'
+    UNWANTED = '.passage-other-trans, .footnote, .footnotes, .crossreference, .crossrefs'
+
+    for tag in passage_soup.select(UNWANTED):
         tag.decompose()
 
-    for tag in soup.select('h1, h2, h3, h4, h5, h6'):
+    for tag in passage_soup.select('h1, h2, h3, h4, h5, h6'):
         tag['class'] = WANTED
         text = tag.text.strip()
         if not inline_details:
@@ -70,7 +72,7 @@ def get_passage(passage, version='NIV', inline_details=False):
 
     needed_stripping = False
 
-    for tag in soup.select('p'):
+    for tag in passage_soup.select('p'):
         tag['class'] = WANTED
         bad_strings = tag(text=re.compile('(\*|\_|\`|\[)'))
         for bad_string in bad_strings:
@@ -81,23 +83,23 @@ def get_passage(passage, version='NIV', inline_details=False):
     if needed_stripping:
         logging.info('Stripped markdown')
 
-    for tag in soup.select('br'):
+    for tag in passage_soup.select('br'):
         tag.name = 'span'
         tag.string = '\n'
 
-    for tag in soup.select('.chapternum'):
+    for tag in passage_soup.select('.chapternum'):
         num = tag.text.strip()
         tag.string = '*' + strip_markdown(num) + '* '
 
-    for tag in soup.select('.versenum'):
+    for tag in passage_soup.select('.versenum'):
         num = tag.text.strip()
         tag.string = to_sup(num)
 
-    for tag in soup.select('.text'):
+    for tag in passage_soup.select('.text'):
         tag.string = tag.text.rstrip()
 
     final_text = header + '\n\n'
-    for tag in soup(class_=WANTED):
+    for tag in passage_soup(class_=WANTED):
         final_text += tag.text.strip() + '\n\n'
 
     logging.debug('Finished BeautifulSoup processing')
