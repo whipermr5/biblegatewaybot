@@ -297,6 +297,7 @@ RECOGNISED_ERRORS = ('PEER_ID_INVALID',
                      'Bad Request: chat not found',
                      'Bad Request: PEER_ID_INVALID',
                      'Bad Request: have no rights to send a message',
+                     'Bad Request: not enough rights to send text messages to the chat',
                      'Bad Request: group chat was deactivated',
                      RECOGNISED_ERROR_MIGRATE)
 
